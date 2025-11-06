@@ -69,5 +69,41 @@
         "hostname": "RaspberryPi-Gateway"
       }
     ]
+  },
+  "my_ssh_cpe": {
+    "devices": [
+      {
+        "name": "board",
+        "type": "rpi_cpe",
+        "connection_type": "ssh",
+        "ip_addr": "192.168.1.1",
+        "username": "root",
+        "password": "your_password_here",
+        "port": "22",
+        "shell_prompt": "root@.*#",
+        "model": "CPE-Gateway",
+        "hostname": "CPE-Gateway"
+      }
+    ]
+  },
+  "my_ssh_rdk_cpe": {
+    "devices": [
+      {
+        "name": "board",
+        "type": "rdk_cpe",
+        "connection_type": "ssh",
+        "ip_addr": "192.168.1.1",
+        "username": "root",
+        "password": "your_password_here",
+        "port": "22",
+        "shell_prompt": "root@.*#",
+        "model": "RDK-CPE-Gateway",
+        "hostname": "RDK-CPE-Gateway",
+        "wan_interface": "erouter0",
+        "lan_interface": "brlan0",
+        "eRouter_Provisioning_mode": "ipv4",
+        "gui_password": "password"
+      }
+    ]
   }
 }

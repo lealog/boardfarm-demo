@@ -14,6 +14,9 @@ from rdk_cpe_device import RdkCpeDevice
 # Import LXD connection
 from lxd_connection import LXDConnection
 
+# Import SSH connection
+from ssh_connection import SSHConnection
+
 
 @hookimpl
 def boardfarm_add_devices():
@@ -24,16 +27,16 @@ def boardfarm_add_devices():
     }
 
 
-def register_lxd_connection():
-    """Register LXD connection type with boardfarm."""
+def register_custom_connections():
+    """Register custom connection types (LXD and SSH) with boardfarm."""
     import sys
     from boardfarm3.lib import connection_factory
     from boardfarm3.exceptions import EnvConfigError
-    
+
     # Store the original connection_factory function
     original_factory = connection_factory.connection_factory
-    
-    # Create a wrapper that adds LXD support
+
+    # Create a wrapper that adds LXD and SSH support
     def patched_connection_factory(connection_type, connection_name, **kwargs):
         if connection_type == "lxd":
             return LXDConnection(
@@ -45,6 +48,17 @@ def register_lxd_connection():
                 cert_file=kwargs.get("cert_file"),
                 key_file=kwargs.get("key_file"),
                 trust_password=kwargs.get("trust_password"),
+            )
+        elif connection_type == "ssh":
+            return SSHConnection(
+                name=connection_name,
+                ip_addr=kwargs.get("ip_addr", kwargs.get("hostname")),
+                username=kwargs.get("username", "root"),
+                password=kwargs.get("password"),
+                port=int(kwargs.get("port", 22)),
+                shell_prompt=[kwargs.get("shell_prompt", "root@")],
+                save_console_logs=kwargs.get("save_console_logs", False),
+                ssh_key=kwargs.get("ssh_key"),
             )
         else:
             # Fallback to original factory for other connection types
@@ -68,8 +82,8 @@ def pytest_configure(config):
     from boardfarm3.main import get_plugin_manager
     pm = get_plugin_manager()
 
-    # Register LXD connection type
-    register_lxd_connection()
+    # Register custom connection types (LXD and SSH)
+    register_custom_connections()
 
     # Register this module as a plugin so the hook is discovered
     pm.register(sys.modules[__name__], name="custom_rpi_devices")
