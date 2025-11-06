@@ -1,12 +1,11 @@
 """Tests for SSH CPE devices."""
 
 import pytest
-from boardfarm3.device_manager import DeviceManager
+from boardfarm3.lib.device_manager import DeviceManager
 from rpi_cpe_device import RpiCpeDevice
 from rdk_cpe_device import RdkCpeDevice
 
 
-@pytest.mark.integration
 def test_ssh_cpe_connection(device_manager: DeviceManager):
     """Test SSH connection to CPE device.
 
@@ -17,6 +16,7 @@ def test_ssh_cpe_connection(device_manager: DeviceManager):
     assert len(devices) > 0, "No rpi_cpe devices found in inventory"
 
     cpe = list(devices.values())[0]
+    print(f"Got device: {cpe}")
 
     # Test basic command execution
     output = cpe.command("echo 'SSH CPE is connected'")
@@ -24,7 +24,6 @@ def test_ssh_cpe_connection(device_manager: DeviceManager):
     print(f"Connection test passed: {output}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_system_info(device_manager: DeviceManager):
     """Test retrieving system information from SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
@@ -46,7 +45,6 @@ def test_ssh_cpe_system_info(device_manager: DeviceManager):
     print(f"Uptime: {uptime}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_network_info(device_manager: DeviceManager):
     """Test retrieving network information from SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
@@ -63,7 +61,6 @@ def test_ssh_cpe_network_info(device_manager: DeviceManager):
     print(f"Routes:\n{routes}")
 
 
-@pytest.mark.integration
 def test_ssh_rdk_cpe_connection(device_manager: DeviceManager):
     """Test SSH connection to RDK CPE device."""
     devices = device_manager.get_devices_by_type(RdkCpeDevice)
@@ -78,7 +75,6 @@ def test_ssh_rdk_cpe_connection(device_manager: DeviceManager):
     print(f"RDK CPE connection test passed: {output}")
 
 
-@pytest.mark.integration
 @pytest.mark.slow
 def test_ssh_rdk_cpe_hardware_info(device_manager: DeviceManager):
     """Test retrieving hardware information from RDK CPE via SSH."""
@@ -104,7 +100,6 @@ def test_ssh_rdk_cpe_hardware_info(device_manager: DeviceManager):
         print(f"Warning: Could not get MAC address: {e}")
 
 
-@pytest.mark.integration
 @pytest.mark.slow
 def test_ssh_rdk_cpe_dmcli_integration(device_manager: DeviceManager):
     """Test DMCLI integration with RDK CPE via SSH.
@@ -141,7 +136,6 @@ def test_ssh_rdk_cpe_dmcli_integration(device_manager: DeviceManager):
         pytest.skip(f"DMCLI not fully functional: {e}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_file_operations(device_manager: DeviceManager):
     """Test file operations on SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
@@ -163,7 +157,6 @@ def test_ssh_cpe_file_operations(device_manager: DeviceManager):
     cpe.command(f"rm -f {test_file}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_process_list(device_manager: DeviceManager):
     """Test listing processes on SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
@@ -176,7 +169,6 @@ def test_ssh_cpe_process_list(device_manager: DeviceManager):
     print(f"Process list (top 20):\n{processes}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_memory_info(device_manager: DeviceManager):
     """Test retrieving memory information from SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
@@ -189,7 +181,6 @@ def test_ssh_cpe_memory_info(device_manager: DeviceManager):
     print(f"Memory Info:\n{mem_info}")
 
 
-@pytest.mark.integration
 def test_ssh_cpe_disk_usage(device_manager: DeviceManager):
     """Test retrieving disk usage from SSH CPE."""
     devices = device_manager.get_devices_by_type(RpiCpeDevice)
