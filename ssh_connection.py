@@ -174,14 +174,24 @@ class SSHConnection(BoardfarmPexpect):
         """Get text before the match (pexpect compatibility)."""
         if self._ssh_session:
             return self._ssh_session.before or ""
-        return ""
+        return getattr(self, '_before', "")
+
+    @before.setter
+    def before(self, value: str) -> None:
+        """Set text before the match (pexpect compatibility)."""
+        self._before = value
 
     @property
     def after(self) -> str:
         """Get text after the match (pexpect compatibility)."""
         if self._ssh_session:
             return self._ssh_session.after or ""
-        return ""
+        return getattr(self, '_after', "")
+
+    @after.setter
+    def after(self, value: str) -> None:
+        """Set text after the match (pexpect compatibility)."""
+        self._after = value
 
     def execute_command(self, command: str, timeout: int = 30) -> str:
         """Execute a command via SSH.
