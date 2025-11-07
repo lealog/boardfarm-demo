@@ -6,16 +6,28 @@ from rpi_cpe_device import RpiCpeDevice
 from rdk_cpe_device import RdkCpeDevice
 
 
+def get_cpe_device(device_manager: DeviceManager):
+    """Get either RPI or RDK CPE device from device manager."""
+    # Try RDK CPE first
+    devices = device_manager.get_devices_by_type(RdkCpeDevice)
+    if devices:
+        return list(devices.values())[0]
+
+    # Fall back to RPI CPE
+    devices = device_manager.get_devices_by_type(RpiCpeDevice)
+    if devices:
+        return list(devices.values())[0]
+
+    pytest.skip("No CPE devices found in inventory")
+
+
 def test_ssh_cpe_connection(device_manager: DeviceManager):
     """Test SSH connection to CPE device.
 
     This test verifies that we can connect to a CPE device via SSH
     and execute basic commands.
     """
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    assert len(devices) > 0, "No rpi_cpe devices found in inventory"
-
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
     print(f"Got device: {cpe}")
 
     # Test basic command execution
@@ -26,8 +38,7 @@ def test_ssh_cpe_connection(device_manager: DeviceManager):
 
 def test_ssh_cpe_system_info(device_manager: DeviceManager):
     """Test retrieving system information from SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Get system hostname
     hostname = cpe.command("hostname")
@@ -47,8 +58,7 @@ def test_ssh_cpe_system_info(device_manager: DeviceManager):
 
 def test_ssh_cpe_network_info(device_manager: DeviceManager):
     """Test retrieving network information from SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Get IP addresses
     ip_info = cpe.command("ip addr show")
@@ -138,8 +148,7 @@ def test_ssh_rdk_cpe_dmcli_integration(device_manager: DeviceManager):
 
 def test_ssh_cpe_file_operations(device_manager: DeviceManager):
     """Test file operations on SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Create a test file
     test_file = "/tmp/boardfarm_test.txt"
@@ -159,8 +168,7 @@ def test_ssh_cpe_file_operations(device_manager: DeviceManager):
 
 def test_ssh_cpe_process_list(device_manager: DeviceManager):
     """Test listing processes on SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Get process list (BusyBox compatible - use head -n 20)
     processes = cpe.command("ps aux | head -n 20")
@@ -172,8 +180,7 @@ def test_ssh_cpe_process_list(device_manager: DeviceManager):
 
 def test_ssh_cpe_memory_info(device_manager: DeviceManager):
     """Test retrieving memory information from SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Get memory info
     mem_info = cpe.command("free -h")
@@ -184,8 +191,7 @@ def test_ssh_cpe_memory_info(device_manager: DeviceManager):
 
 def test_ssh_cpe_disk_usage(device_manager: DeviceManager):
     """Test retrieving disk usage from SSH CPE."""
-    devices = device_manager.get_devices_by_type(RpiCpeDevice)
-    cpe = list(devices.values())[0]
+    cpe = get_cpe_device(device_manager)
 
     # Get disk usage
     disk_info = cpe.command("df -h")
