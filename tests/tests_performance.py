@@ -22,68 +22,27 @@ class TestPerformance:
         assert len(devices) > 0, "No RDK CPE devices found"
         return list(devices.values())[0]
 
-    def _ensure_speedtest_installed(self, board: RdkCpeDevice) -> bool:
-        """Ensure speedtest-cli is installed on the device.
+    def _ensure_speedtest_installed_locally(self) -> bool:
+        """Ensure speedtest-cli is installed locally on the PC running boardfarm.
 
         Returns:
             bool: True if speedtest-cli is available, False otherwise
         """
-        logger.info("Checking if speedtest-cli is installed...")
+        import shutil
 
-        try:
-            # Check if speedtest-cli is already installed
-            result = board.command("which speedtest-cli", timeout=10)
-            if result.strip() and "speedtest-cli" in result:
-                logger.info("✓ speedtest-cli is already installed")
-                return True
+        logger.info("Checking if speedtest-cli is installed locally...")
 
-            logger.info("speedtest-cli not found, attempting to install...")
+        # Check if speedtest-cli is already installed
+        if shutil.which("speedtest-cli"):
+            logger.info("✓ speedtest-cli is already installed locally")
+            return True
 
-            # Try pip installation (most common method)
-            try:
-                logger.info("Trying to install via pip...")
-                board.command("pip install speedtest-cli", timeout=120)
-
-                # Verify installation
-                result = board.command("which speedtest-cli", timeout=10)
-                if "speedtest-cli" in result:
-                    logger.info("✓ speedtest-cli installed successfully via pip")
-                    return True
-            except Exception as e:
-                logger.warning(f"pip installation failed: {e}")
-
-            # Try pip3
-            try:
-                logger.info("Trying to install via pip3...")
-                board.command("pip3 install speedtest-cli", timeout=120)
-
-                # Verify installation
-                result = board.command("which speedtest-cli", timeout=10)
-                if "speedtest-cli" in result:
-                    logger.info("✓ speedtest-cli installed successfully via pip3")
-                    return True
-            except Exception as e:
-                logger.warning(f"pip3 installation failed: {e}")
-
-            # Try apt-get (Debian/Ubuntu)
-            try:
-                logger.info("Trying to install via apt-get...")
-                board.command("apt-get update && apt-get install -y speedtest-cli", timeout=180)
-
-                # Verify installation
-                result = board.command("which speedtest-cli", timeout=10)
-                if "speedtest-cli" in result:
-                    logger.info("✓ speedtest-cli installed successfully via apt-get")
-                    return True
-            except Exception as e:
-                logger.warning(f"apt-get installation failed: {e}")
-
-            logger.error("Failed to install speedtest-cli with any method")
-            return False
-
-        except Exception as e:
-            logger.error(f"Error checking/installing speedtest-cli: {e}")
-            return False
+        logger.error("speedtest-cli not found on local system")
+        logger.info("Please install speedtest-cli using one of these methods:")
+        logger.info("  - pip: pip install speedtest-cli")
+        logger.info("  - pip3: pip3 install speedtest-cli")
+        logger.info("  - apt: apt-get install speedtest-cli")
+        return False
 
     def _convert_bytes_to_human_readable(self, bytes_value: float) -> str:
         """Convert bytes to human readable format.
@@ -109,10 +68,15 @@ class TestPerformance:
     @pytest.mark.integration
     @pytest.mark.slow
     def test_speedtest_cli_performance(self, device_manager: DeviceManager):
-        """Test internet performance using speedtest-cli.
+        """Test internet performance using speedtest-cli from LAN PC.
 
         This test measures real-world internet performance by running
-        speedtest-cli against Ookla's speedtest servers. It reports:
+        speedtest-cli locally on the PC (in LAN) against Ookla's speedtest servers.
+        Traffic flows through the CPE to measure actual user experience.
+
+        Traffic flow: LAN PC (running speedtest) → CPE → Internet (Speedtest servers)
+
+        Reports:
         - Download speed (bytes/sec)
         - Upload speed (bytes/sec)
         - Ping latency (ms)
@@ -123,26 +87,36 @@ class TestPerformance:
         """
         board = self._get_board(device_manager)
 
-        logger.info("\n=== Speedtest-CLI Performance Test ===")
+        logger.info("\n=== Speedtest-CLI Performance Test (LAN PC → CPE → Internet) ===")
 
-        # Ensure speedtest-cli is installed
-        if not self._ensure_speedtest_installed(board):
-            pytest.skip("speedtest-cli not available and could not be installed")
+        # Ensure speedtest-cli is installed locally
+        if not self._ensure_speedtest_installed_locally():
+            pytest.skip("speedtest-cli not available on local system. Install with: pip install speedtest-cli")
             return
 
-        logger.info("Running speedtest-cli (this may take 30-60 seconds)...")
+        logger.info("Running speedtest-cli locally (this may take 30-60 seconds)...")
 
         try:
-            # Run speedtest with JSON output
+            import subprocess
+
+            # Run speedtest with JSON output locally
             # Using a longer timeout as speedtest can take time
-            result = board.command("speedtest-cli --json", timeout=120)
+            result = subprocess.run(
+                ["speedtest-cli", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            output = result.stdout
 
             # Parse JSON output
             try:
-                speedtest_data = json.loads(result)
+                speedtest_data = json.loads(output)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse speedtest JSON output: {e}")
-                logger.error(f"Raw output: {result}")
+                logger.error(f"Raw output: {output}")
+                logger.error(f"Error output: {result.stderr}")
                 pytest.fail("Failed to parse speedtest-cli JSON output")
                 return
 
@@ -169,7 +143,7 @@ class TestPerformance:
             upload_readable = self._convert_bytes_to_human_readable(upload_bps)
 
             # Log results
-            logger.info("\n=== Speedtest Results ===")
+            logger.info("\n=== Speedtest Results (via CPE) ===")
             logger.info(f"Download: {download_bps:.0f} bytes/sec ({download_readable})")
             logger.info(f"Upload: {upload_bps:.0f} bytes/sec ({upload_readable})")
             logger.info(f"Ping: {ping_ms:.2f} ms")
@@ -193,6 +167,9 @@ class TestPerformance:
 
             logger.info("✅ Speedtest completed successfully!")
 
+        except subprocess.TimeoutExpired:
+            logger.error("Speedtest timed out after 120 seconds")
+            pytest.fail("Speedtest execution timed out")
         except Exception as e:
             logger.error(f"Speedtest failed: {e}")
             pytest.fail(f"Speedtest execution failed: {e}")
