@@ -102,7 +102,10 @@
         "wan_interface": "erouter0",
         "lan_interface": "brlan0",
         "eRouter_Provisioning_mode": "ipv4",
-        "gui_password": "password"
+        "gui_password": "password",
+        "iperf_server": "ping.online.net",
+        "iperf_server_ipv6": "2001:bc8:47a0:16c2::1",
+        "iperf_ports": "5200-5209"
       }
     ]
   }

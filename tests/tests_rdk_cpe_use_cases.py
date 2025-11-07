@@ -320,20 +320,51 @@ class TestRdkCpeUseCases:
         try:
             result = board.command("which iperf3", timeout=10)
             if not result.strip() or "/iperf3" not in result:
-                logger.info("ℹ iperf3 not available, installing...")
-                # Try to install iperf3 if not available
+                logger.info("ℹ iperf3 not available, attempting to install...")
+
+                # Detect package manager and try to install
+                install_success = False
+
+                # Try opkg first (common on RDK/OpenWrt devices)
                 try:
-                    board.command("apt-get update && apt-get install -y iperf3", timeout=60)
-                    logger.info("✓ iperf3 installed successfully")
+                    pkg_check = board.command("which opkg", timeout=5)
+                    if "opkg" in pkg_check:
+                        logger.info("Detected opkg package manager, installing iperf3...")
+                        board.command("opkg update", timeout=60)
+                        board.command("opkg install iperf3", timeout=60)
+                        # Verify installation
+                        verify = board.command("which iperf3", timeout=5)
+                        if "iperf3" in verify:
+                            install_success = True
+                            logger.info("✓ iperf3 installed successfully via opkg")
                 except Exception as e:
-                    logger.info(f"✗ Failed to install iperf3: {e}")
-                    logger.info("ℹ Skipping iperf use case test - iperf3 not available")
+                    logger.info(f"opkg installation attempt failed: {e}")
+
+                # Try apt-get if opkg failed
+                if not install_success:
+                    try:
+                        logger.info("Trying apt-get package manager...")
+                        board.command("apt-get update && apt-get install -y iperf3", timeout=120)
+                        # Verify installation
+                        verify = board.command("which iperf3", timeout=5)
+                        if "iperf3" in verify:
+                            install_success = True
+                            logger.info("✓ iperf3 installed successfully via apt-get")
+                    except Exception as e:
+                        logger.info(f"apt-get installation attempt failed: {e}")
+
+                if not install_success:
+                    logger.info("✗ Failed to install iperf3 with any package manager")
+                    logger.info("ℹ Please manually install iperf3 on the device:")
+                    logger.info("   - For OpenWrt/RDK: opkg update && opkg install iperf3")
+                    logger.info("   - For Debian: apt-get update && apt-get install -y iperf3")
+                    pytest.skip("iperf3 not available and could not be installed")
                     return
             else:
                 logger.info("✓ iperf3 is available on the device")
         except Exception as e:
             logger.info(f"✗ Error checking iperf3 availability: {e}")
-            logger.info("ℹ Skipping iperf use case test")
+            pytest.skip(f"Cannot check iperf3 availability: {e}")
             return
 
         try:
@@ -440,3 +471,297 @@ class TestRdkCpeUseCases:
                 pass
             # Re-raise the exception to fail the test
             raise
+
+    @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.ipv4
+    def test_iperf_wan_throughput_ipv4(self, device_manager: DeviceManager):
+        """Test real CPE IPv4 throughput using WAN-side iperf server.
+
+        This test measures actual CPE IPv4 performance by testing:
+        - TCP Download throughput (WAN → CPE → LAN)
+        - TCP Upload throughput (LAN → CPE → WAN)
+        - UDP Upload with packet loss monitoring
+
+        Uses public iperf3 server: ping.online.net (ports 5200-5209)
+        """
+        board = self._get_board(device_manager)
+
+        logger.info("\n=== Real CPE IPv4 WAN Throughput Test ===")
+
+        # Test configuration
+        iperf_server = "ping.online.net"
+        test_duration = 10  # seconds
+
+        # Check if iperf3 is available
+        try:
+            result = board.command("which iperf3", timeout=10)
+            if "iperf3" not in result:
+                logger.info("ℹ iperf3 not available on CPE")
+                pytest.skip("iperf3 not available on CPE device")
+                return
+            logger.info("✓ iperf3 is available on CPE")
+        except Exception as e:
+            pytest.skip(f"Cannot check iperf3 availability: {e}")
+            return
+
+        # Check connectivity to iperf server
+        logger.info(f"Checking IPv4 connectivity to {iperf_server}...")
+        try:
+            ping_result = board.command(f"ping -c 2 -W 5 {iperf_server}", timeout=15)
+            if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
+                logger.warning(f"Cannot reach {iperf_server} via IPv4")
+                pytest.skip(f"Cannot reach iperf server {iperf_server} via IPv4")
+                return
+            logger.info(f"✓ CPE can reach {iperf_server} via IPv4")
+        except Exception as e:
+            logger.warning(f"IPv4 connectivity check failed: {e}")
+            pytest.skip(f"Cannot verify IPv4 connectivity to {iperf_server}")
+            return
+
+        throughput_results = {}
+        import re
+
+        # Test 1: IPv4 TCP Download (Server → CPE)
+        logger.info("\n--- Test 1: IPv4 TCP Download (WAN → CPE) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server} -p 5201 -t {test_duration} -R"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec"
+                logger.info(f"✓ IPv4 TCP Download: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["tcp_download"] = "Failed to parse"
+                logger.warning("Could not parse download bandwidth")
+        except Exception as e:
+            throughput_results["tcp_download"] = f"Error: {e}"
+            logger.error(f"IPv4 TCP Download test failed: {e}")
+
+        # Test 2: IPv4 TCP Upload (CPE → Server)
+        logger.info("\n--- Test 2: IPv4 TCP Upload (CPE → WAN) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server} -p 5202 -t {test_duration}"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec"
+                logger.info(f"✓ IPv4 TCP Upload: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["tcp_upload"] = "Failed to parse"
+                logger.warning("Could not parse upload bandwidth")
+        except Exception as e:
+            throughput_results["tcp_upload"] = f"Error: {e}"
+            logger.error(f"IPv4 TCP Upload test failed: {e}")
+
+        # Test 3: IPv4 UDP Upload with bandwidth limit
+        logger.info("\n--- Test 3: IPv4 UDP Upload (CPE → WAN) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server} -p 5203 -t {test_duration} -u -b 50M"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            # For UDP, look for both bandwidth and packet loss
+            bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                loss = bw_match.group(3)
+                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%)"
+                logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+            else:
+                throughput_results["udp_upload"] = "Failed to parse"
+                logger.warning("Could not parse UDP bandwidth")
+        except Exception as e:
+            throughput_results["udp_upload"] = f"Error: {e}"
+            logger.error(f"IPv4 UDP Upload test failed: {e}")
+
+        # Print comprehensive results
+        logger.info("\n=== IPv4 CPE WAN Throughput Test Results ===")
+        logger.info(f"Server: {iperf_server}")
+        logger.info(f"Test Duration: {test_duration} seconds")
+        logger.info("\nResults:")
+        for test_name, result in throughput_results.items():
+            logger.info(f"  {test_name}: {result}")
+        logger.info("=============================================\n")
+
+        # Validate that at least TCP tests succeeded
+        successful_tests = sum(1 for result in throughput_results.values()
+                              if "Error" not in str(result) and "Failed" not in str(result))
+
+        assert successful_tests >= 2, f"At least 2 IPv4 throughput tests should succeed, got {successful_tests}"
+
+        # Validate TCP download and upload
+        if "tcp_download" in throughput_results:
+            result_str = throughput_results["tcp_download"]
+            if "bits/sec" in result_str and "Error" not in result_str:
+                logger.info("✅ IPv4 TCP Download test passed")
+
+        if "tcp_upload" in throughput_results:
+            result_str = throughput_results["tcp_upload"]
+            if "bits/sec" in result_str and "Error" not in result_str:
+                logger.info("✅ IPv4 TCP Upload test passed")
+
+        logger.info("✅ IPv4 CPE WAN throughput test completed!")
+
+    @pytest.mark.integration
+    @pytest.mark.slow
+    @pytest.mark.ipv6
+    def test_iperf_wan_throughput_ipv6(self, device_manager: DeviceManager):
+        """Test real CPE IPv6 throughput using WAN-side iperf server.
+
+        This test measures actual CPE IPv6 performance by testing:
+        - TCP Download throughput (WAN → CPE → LAN)
+        - TCP Upload throughput (LAN → CPE → WAN)
+        - UDP Upload with packet loss monitoring
+
+        Uses public iperf3 server: ping6.online.net (ports 5200-5209)
+        """
+        board = self._get_board(device_manager)
+
+        logger.info("\n=== Real CPE IPv6 WAN Throughput Test ===")
+
+        # Test configuration
+        iperf_server = "ping6.online.net"
+        iperf_server_ipv6 = "2001:bc8:47a0:16c2::1"  # ping6.online.net IPv6
+        test_duration = 10  # seconds
+
+        # Check if iperf3 is available
+        try:
+            result = board.command("which iperf3", timeout=10)
+            if "iperf3" not in result:
+                logger.info("ℹ iperf3 not available on CPE")
+                pytest.skip("iperf3 not available on CPE device")
+                return
+            logger.info("✓ iperf3 is available on CPE")
+        except Exception as e:
+            pytest.skip(f"Cannot check iperf3 availability: {e}")
+            return
+
+        # Check if IPv6 is available on CPE
+        logger.info("Checking IPv6 availability on CPE...")
+        try:
+            ipv6_check = board.command("ip -6 addr show", timeout=10)
+            if "inet6" not in ipv6_check or "scope global" not in ipv6_check:
+                logger.info("ℹ IPv6 not configured on CPE")
+                pytest.skip("IPv6 not available on CPE device")
+                return
+            logger.info("✓ IPv6 is configured on CPE")
+        except Exception as e:
+            pytest.skip(f"Cannot check IPv6 availability: {e}")
+            return
+
+        # Check IPv6 connectivity to iperf server
+        logger.info(f"Checking IPv6 connectivity to {iperf_server}...")
+        try:
+            ping_result = board.command(f"ping6 -c 2 -W 5 {iperf_server}", timeout=15)
+            if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
+                logger.warning(f"Cannot reach {iperf_server} via IPv6")
+                pytest.skip(f"Cannot reach iperf server {iperf_server} via IPv6")
+                return
+            logger.info(f"✓ CPE can reach {iperf_server} via IPv6")
+        except Exception as e:
+            logger.warning(f"IPv6 connectivity check failed: {e}")
+            pytest.skip(f"Cannot verify IPv6 connectivity to {iperf_server}")
+            return
+
+        throughput_results = {}
+        import re
+
+        # Test 1: IPv6 TCP Download (Server → CPE)
+        logger.info("\n--- Test 1: IPv6 TCP Download (WAN → CPE) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5204 -t {test_duration} -R -6"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec"
+                logger.info(f"✓ IPv6 TCP Download: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["tcp_download"] = "Failed to parse"
+                logger.warning("Could not parse download bandwidth")
+        except Exception as e:
+            throughput_results["tcp_download"] = f"Error: {e}"
+            logger.error(f"IPv6 TCP Download test failed: {e}")
+
+        # Test 2: IPv6 TCP Upload (CPE → Server)
+        logger.info("\n--- Test 2: IPv6 TCP Upload (CPE → WAN) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5205 -t {test_duration} -6"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec"
+                logger.info(f"✓ IPv6 TCP Upload: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["tcp_upload"] = "Failed to parse"
+                logger.warning("Could not parse upload bandwidth")
+        except Exception as e:
+            throughput_results["tcp_upload"] = f"Error: {e}"
+            logger.error(f"IPv6 TCP Upload test failed: {e}")
+
+        # Test 3: IPv6 UDP Upload with bandwidth limit
+        logger.info("\n--- Test 3: IPv6 UDP Upload (CPE → WAN) ---")
+        try:
+            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5206 -t {test_duration} -u -b 50M -6"
+            logger.info(f"Running: {cmd}")
+            result = board.command(cmd, timeout=test_duration + 30)
+
+            # For UDP, look for both bandwidth and packet loss
+            bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+                loss = bw_match.group(3)
+                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%)"
+                logger.info(f"✓ IPv6 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+            else:
+                throughput_results["udp_upload"] = "Failed to parse"
+                logger.warning("Could not parse UDP bandwidth")
+        except Exception as e:
+            throughput_results["udp_upload"] = f"Error: {e}"
+            logger.error(f"IPv6 UDP Upload test failed: {e}")
+
+        # Print comprehensive results
+        logger.info("\n=== IPv6 CPE WAN Throughput Test Results ===")
+        logger.info(f"Server: {iperf_server} ({iperf_server_ipv6})")
+        logger.info(f"Test Duration: {test_duration} seconds")
+        logger.info("\nResults:")
+        for test_name, result in throughput_results.items():
+            logger.info(f"  {test_name}: {result}")
+        logger.info("=============================================\n")
+
+        # Validate that at least TCP tests succeeded
+        successful_tests = sum(1 for result in throughput_results.values()
+                              if "Error" not in str(result) and "Failed" not in str(result))
+
+        assert successful_tests >= 2, f"At least 2 IPv6 throughput tests should succeed, got {successful_tests}"
+
+        # Validate TCP download and upload
+        if "tcp_download" in throughput_results:
+            result_str = throughput_results["tcp_download"]
+            if "bits/sec" in result_str and "Error" not in result_str:
+                logger.info("✅ IPv6 TCP Download test passed")
+
+        if "tcp_upload" in throughput_results:
+            result_str = throughput_results["tcp_upload"]
+            if "bits/sec" in result_str and "Error" not in result_str:
+                logger.info("✅ IPv6 TCP Upload test passed")
+
+        logger.info("✅ IPv6 CPE WAN throughput test completed!")
