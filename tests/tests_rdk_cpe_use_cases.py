@@ -489,9 +489,11 @@ class TestRdkCpeUseCases:
 
         logger.info("\n=== Real CPE IPv4 WAN Throughput Test ===")
 
-        # Test configuration
-        iperf_server = "ping.online.net"
-        test_duration = 10  # seconds
+        # Get test configuration from device inventory
+        iperf_server_ipv4 = board.config.get("iperf_server_ipv4", "ping.online.net")
+        test_duration = board.config.get("iperf_test_duration_ipv4", 10)
+        iperf_ports = board.config.get("iperf_ports_ipv4", [5201, 5202, 5203])
+        max_retries_per_port = 3
 
         # Check if iperf3 is available
         try:
@@ -506,88 +508,122 @@ class TestRdkCpeUseCases:
             return
 
         # Check connectivity to iperf server
-        logger.info(f"Checking IPv4 connectivity to {iperf_server}...")
+        logger.info(f"Checking IPv4 connectivity to {iperf_server_ipv4}...")
         try:
-            ping_result = board.command(f"ping -c 2 -W 5 {iperf_server}", timeout=15)
+            ping_result = board.command(f"ping -c 2 -W 5 {iperf_server_ipv4}", timeout=15)
             if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
-                logger.warning(f"Cannot reach {iperf_server} via IPv4")
-                pytest.skip(f"Cannot reach iperf server {iperf_server} via IPv4")
+                logger.warning(f"Cannot reach {iperf_server_ipv4} via IPv4")
+                pytest.skip(f"Cannot reach iperf server {iperf_server_ipv4} via IPv4")
                 return
-            logger.info(f"✓ CPE can reach {iperf_server} via IPv4")
+            logger.info(f"✓ CPE can reach {iperf_server_ipv4} via IPv4")
         except Exception as e:
             logger.warning(f"IPv4 connectivity check failed: {e}")
-            pytest.skip(f"Cannot verify IPv4 connectivity to {iperf_server}")
+            pytest.skip(f"Cannot verify IPv4 connectivity to {iperf_server_ipv4}")
             return
 
         throughput_results = {}
         import re
+        import time
+
+        def run_iperf_with_retry(test_name, extra_flags=""):
+            """Run iperf3 test with retry mechanism, rotating through available ports.
+
+            Tries each port up to max_retries_per_port times before moving to next port.
+            """
+            for port in iperf_ports:
+                for attempt in range(1, max_retries_per_port + 1):
+                    try:
+                        cmd = f"iperf3 -c {iperf_server_ipv4} -p {port} -t {test_duration} {extra_flags}"
+                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {cmd}")
+                        result = board.command(cmd, timeout=test_duration + 30)
+
+                        # Check if server is busy
+                        if "server is busy" in result.lower() or "unable to connect" in result.lower():
+                            if attempt < max_retries_per_port:
+                                logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                                time.sleep(2)  # Wait before retry
+                                continue
+                            else:
+                                logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
+                                break  # Try next port
+
+                        # Successfully got result
+                        logger.info(f"✓ Successfully connected using port {port}")
+                        return result, port, None
+
+                    except Exception as e:
+                        if attempt < max_retries_per_port:
+                            logger.warning(f"Error on port {port}, attempt {attempt}/{max_retries_per_port}: {e}")
+                            time.sleep(2)
+                            continue
+                        else:
+                            logger.warning(f"Failed on port {port} after {max_retries_per_port} attempts, trying next port...")
+                            break  # Try next port
+
+            # Exhausted all ports and retries
+            error_msg = f"Failed after trying all ports {iperf_ports} with {max_retries_per_port} attempts each"
+            logger.error(error_msg)
+            return None, None, error_msg
 
         # Test 1: IPv4 TCP Download (Server → CPE)
         logger.info("\n--- Test 1: IPv4 TCP Download (WAN → CPE) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server} -p 5201 -t {test_duration} -R"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_with_retry("tcp_download", "-R")
+        if result:
             bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec"
+                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
                 logger.info(f"✓ IPv4 TCP Download: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["tcp_download"] = "Failed to parse"
                 logger.warning("Could not parse download bandwidth")
-        except Exception as e:
-            throughput_results["tcp_download"] = f"Error: {e}"
-            logger.error(f"IPv4 TCP Download test failed: {e}")
+        else:
+            throughput_results["tcp_download"] = f"Error: {error}"
+            logger.error(f"IPv4 TCP Download test failed: {error}")
 
         # Test 2: IPv4 TCP Upload (CPE → Server)
         logger.info("\n--- Test 2: IPv4 TCP Upload (CPE → WAN) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server} -p 5202 -t {test_duration}"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_with_retry("tcp_upload", "")
+        if result:
             bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec"
+                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
                 logger.info(f"✓ IPv4 TCP Upload: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["tcp_upload"] = "Failed to parse"
                 logger.warning("Could not parse upload bandwidth")
-        except Exception as e:
-            throughput_results["tcp_upload"] = f"Error: {e}"
-            logger.error(f"IPv4 TCP Upload test failed: {e}")
+        else:
+            throughput_results["tcp_upload"] = f"Error: {error}"
+            logger.error(f"IPv4 TCP Upload test failed: {error}")
 
         # Test 3: IPv4 UDP Upload with bandwidth limit
         logger.info("\n--- Test 3: IPv4 UDP Upload (CPE → WAN) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server} -p 5203 -t {test_duration} -u -b 50M"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_with_retry("udp_upload", "-u -b 50M")
+        if result:
             # For UDP, look for both bandwidth and packet loss
             bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
                 loss = bw_match.group(3)
-                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%)"
+                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
                 logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
-        except Exception as e:
-            throughput_results["udp_upload"] = f"Error: {e}"
-            logger.error(f"IPv4 UDP Upload test failed: {e}")
+        else:
+            throughput_results["udp_upload"] = f"Error: {error}"
+            logger.error(f"IPv4 UDP Upload test failed: {error}")
 
         # Print comprehensive results
         logger.info("\n=== IPv4 CPE WAN Throughput Test Results ===")
-        logger.info(f"Server: {iperf_server}")
+        logger.info(f"Server: {iperf_server_ipv4}")
         logger.info(f"Test Duration: {test_duration} seconds")
+        logger.info(f"Ports Used: {iperf_ports}")
+        logger.info(f"Max Retries Per Port: {max_retries_per_port}")
         logger.info("\nResults:")
         for test_name, result in throughput_results.items():
             logger.info(f"  {test_name}: {result}")
@@ -629,10 +665,11 @@ class TestRdkCpeUseCases:
 
         logger.info("\n=== Real CPE IPv6 WAN Throughput Test ===")
 
-        # Test configuration
-        iperf_server = "ping6.online.net"
-        iperf_server_ipv6 = "2001:bc8:47a0:16c2::1"  # ping6.online.net IPv6
-        test_duration = 10  # seconds
+        # Get test configuration from device inventory
+        iperf_server_ipv6 = board.config.get("iperf_server_ipv6", "ping6.online.net")
+        test_duration = board.config.get("iperf_test_duration_ipv6", 10)
+        iperf_ports = board.config.get("iperf_ports_ipv6", [5204, 5205, 5206])
+        max_retries_per_port = 3
 
         # Check if iperf3 is available
         try:
@@ -660,88 +697,122 @@ class TestRdkCpeUseCases:
             return
 
         # Check IPv6 connectivity to iperf server
-        logger.info(f"Checking IPv6 connectivity to {iperf_server}...")
+        logger.info(f"Checking IPv6 connectivity to {iperf_server_ipv6}...")
         try:
-            ping_result = board.command(f"ping6 -c 2 -W 5 {iperf_server}", timeout=15)
+            ping_result = board.command(f"ping6 -c 2 -W 5 {iperf_server_ipv6}", timeout=15)
             if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
-                logger.warning(f"Cannot reach {iperf_server} via IPv6")
-                pytest.skip(f"Cannot reach iperf server {iperf_server} via IPv6")
+                logger.warning(f"Cannot reach {iperf_server_ipv6} via IPv6")
+                pytest.skip(f"Cannot reach iperf server {iperf_server_ipv6} via IPv6")
                 return
-            logger.info(f"✓ CPE can reach {iperf_server} via IPv6")
+            logger.info(f"✓ CPE can reach {iperf_server_ipv6} via IPv6")
         except Exception as e:
             logger.warning(f"IPv6 connectivity check failed: {e}")
-            pytest.skip(f"Cannot verify IPv6 connectivity to {iperf_server}")
+            pytest.skip(f"Cannot verify IPv6 connectivity to {iperf_server_ipv6}")
             return
 
         throughput_results = {}
         import re
+        import time
+
+        def run_iperf_ipv6_with_retry(test_name, extra_flags=""):
+            """Run iperf3 IPv6 test with retry mechanism, rotating through available ports.
+
+            Tries each port up to max_retries_per_port times before moving to next port.
+            """
+            for port in iperf_ports:
+                for attempt in range(1, max_retries_per_port + 1):
+                    try:
+                        cmd = f"iperf3 -c {iperf_server_ipv6} -p {port} -t {test_duration} {extra_flags} -6"
+                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {cmd}")
+                        result = board.command(cmd, timeout=test_duration + 30)
+
+                        # Check if server is busy
+                        if "server is busy" in result.lower() or "unable to connect" in result.lower():
+                            if attempt < max_retries_per_port:
+                                logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                                time.sleep(2)  # Wait before retry
+                                continue
+                            else:
+                                logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
+                                break  # Try next port
+
+                        # Successfully got result
+                        logger.info(f"✓ Successfully connected using port {port}")
+                        return result, port, None
+
+                    except Exception as e:
+                        if attempt < max_retries_per_port:
+                            logger.warning(f"Error on port {port}, attempt {attempt}/{max_retries_per_port}: {e}")
+                            time.sleep(2)
+                            continue
+                        else:
+                            logger.warning(f"Failed on port {port} after {max_retries_per_port} attempts, trying next port...")
+                            break  # Try next port
+
+            # Exhausted all ports and retries
+            error_msg = f"Failed after trying all ports {iperf_ports} with {max_retries_per_port} attempts each"
+            logger.error(error_msg)
+            return None, None, error_msg
 
         # Test 1: IPv6 TCP Download (Server → CPE)
         logger.info("\n--- Test 1: IPv6 TCP Download (WAN → CPE) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5204 -t {test_duration} -R -6"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_ipv6_with_retry("tcp_download", "-R")
+        if result:
             bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec"
+                throughput_results["tcp_download"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
                 logger.info(f"✓ IPv6 TCP Download: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["tcp_download"] = "Failed to parse"
                 logger.warning("Could not parse download bandwidth")
-        except Exception as e:
-            throughput_results["tcp_download"] = f"Error: {e}"
-            logger.error(f"IPv6 TCP Download test failed: {e}")
+        else:
+            throughput_results["tcp_download"] = f"Error: {error}"
+            logger.error(f"IPv6 TCP Download test failed: {error}")
 
         # Test 2: IPv6 TCP Upload (CPE → Server)
         logger.info("\n--- Test 2: IPv6 TCP Upload (CPE → WAN) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5205 -t {test_duration} -6"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_ipv6_with_retry("tcp_upload", "")
+        if result:
             bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec"
+                throughput_results["tcp_upload"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
                 logger.info(f"✓ IPv6 TCP Upload: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["tcp_upload"] = "Failed to parse"
                 logger.warning("Could not parse upload bandwidth")
-        except Exception as e:
-            throughput_results["tcp_upload"] = f"Error: {e}"
-            logger.error(f"IPv6 TCP Upload test failed: {e}")
+        else:
+            throughput_results["tcp_upload"] = f"Error: {error}"
+            logger.error(f"IPv6 TCP Upload test failed: {error}")
 
         # Test 3: IPv6 UDP Upload with bandwidth limit
         logger.info("\n--- Test 3: IPv6 UDP Upload (CPE → WAN) ---")
-        try:
-            cmd = f"iperf3 -c {iperf_server_ipv6} -p 5206 -t {test_duration} -u -b 50M -6"
-            logger.info(f"Running: {cmd}")
-            result = board.command(cmd, timeout=test_duration + 30)
-
+        result, used_port, error = run_iperf_ipv6_with_retry("udp_upload", "-u -b 50M")
+        if result:
             # For UDP, look for both bandwidth and packet loss
             bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
                 loss = bw_match.group(3)
-                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%)"
+                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
                 logger.info(f"✓ IPv6 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
-        except Exception as e:
-            throughput_results["udp_upload"] = f"Error: {e}"
-            logger.error(f"IPv6 UDP Upload test failed: {e}")
+        else:
+            throughput_results["udp_upload"] = f"Error: {error}"
+            logger.error(f"IPv6 UDP Upload test failed: {error}")
 
         # Print comprehensive results
         logger.info("\n=== IPv6 CPE WAN Throughput Test Results ===")
-        logger.info(f"Server: {iperf_server} ({iperf_server_ipv6})")
+        logger.info(f"Server: {iperf_server_ipv6}")
         logger.info(f"Test Duration: {test_duration} seconds")
+        logger.info(f"Ports Used: {iperf_ports}")
+        logger.info(f"Max Retries Per Port: {max_retries_per_port}")
         logger.info("\nResults:")
         for test_name, result in throughput_results.items():
             logger.info(f"  {test_name}: {result}")

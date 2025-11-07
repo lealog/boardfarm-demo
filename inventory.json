@@ -103,9 +103,12 @@
         "lan_interface": "brlan0",
         "eRouter_Provisioning_mode": "ipv4",
         "gui_password": "password",
-        "iperf_server": "ping.online.net",
-        "iperf_server_ipv6": "2001:bc8:47a0:16c2::1",
-        "iperf_ports": "5200-5209"
+        "iperf_server_ipv4": "ping.online.net",
+        "iperf_server_ipv6": "ping6.online.net",
+        "iperf_ports_ipv4": [5200, 5201, 5202, 5203, 5204],
+        "iperf_ports_ipv6": [5205, 5206, 5207, 5208, 5209],
+        "iperf_test_duration_ipv4": 10,
+        "iperf_test_duration_ipv6": 10
       }
     ]
   }
