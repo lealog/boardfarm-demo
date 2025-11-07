@@ -743,6 +743,12 @@ class RdkCpeDevice(CPE, LinuxDevice):
             _LOGGER.warning("HTTP GUI configuration check failed: %s", str(e))
 
     @hookimpl
+    def boardfarm_device_teardown(self) -> None:
+        """Boardfarm hook implementation to teardown the RDK device."""
+        _LOGGER.info("Teardown %s(%s) device", self.device_name, self.device_type)
+        self.hw.disconnect_from_consoles()
+
+    @hookimpl
     def boardfarm_shutdown_device(self) -> None:
         """Boardfarm hook implementation to shutdown the RDK device."""
         _LOGGER.info("Shutdown %s(%s) device", self.device_name, self.device_type)

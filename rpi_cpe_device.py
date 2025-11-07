@@ -79,6 +79,11 @@ class RpiCpeDevice(BoardfarmDevice):
         """Boot hook to establish connection to the device."""
         self.connect_to_consoles(self.device_name)
 
+    @hookimpl
+    def boardfarm_device_teardown(self):
+        """Teardown hook to close connection to the device."""
+        self.close()
+
     def close(self):
         """Close the device connection."""
         if self._console:
