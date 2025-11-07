@@ -603,8 +603,8 @@ class TestRdkCpeUseCases:
             logger.error(error_msg)
             return None, None, error_msg
 
-        # Test 1: IPv4 TCP Download (Server → CPE)
-        logger.info("\n--- Test 1: IPv4 TCP Download (WAN → CPE) ---")
+        # Test 1: IPv4 TCP Download (WAN → CPE → LAN Client)
+        logger.info("\n--- Test 1: IPv4 TCP Download (WAN → CPE → LAN Client) ---")
         result, used_port, error = run_iperf_with_retry("tcp_download", "-R")
         if result:
             # For reverse mode (-R), look for "receiver" line in final summary
@@ -622,8 +622,8 @@ class TestRdkCpeUseCases:
             throughput_results["tcp_download"] = f"Error: {error}"
             logger.error(f"IPv4 TCP Download test failed: {error}")
 
-        # Test 2: IPv4 TCP Upload (CPE → Server)
-        logger.info("\n--- Test 2: IPv4 TCP Upload (CPE → WAN) ---")
+        # Test 2: IPv4 TCP Upload (LAN Client → CPE → WAN)
+        logger.info("\n--- Test 2: IPv4 TCP Upload (LAN Client → CPE → WAN) ---")
         result, used_port, error = run_iperf_with_retry("tcp_upload", "")
         if result:
             # For normal mode, look for "sender" line in final summary
@@ -642,7 +642,7 @@ class TestRdkCpeUseCases:
             logger.error(f"IPv4 TCP Upload test failed: {error}")
 
         # Test 3: IPv4 UDP Download with bandwidth limit (reverse mode)
-        logger.info("\n--- Test 3: IPv4 UDP Download (WAN → CPE) ---")
+        logger.info("\n--- Test 3: IPv4 UDP Download (WAN → CPE → LAN Client) ---")
         result, used_port, error = run_iperf_with_retry("udp_download", "-u -b 50M -R")
         if result:
             # For UDP reverse, look for receiver line with bandwidth
@@ -663,13 +663,13 @@ class TestRdkCpeUseCases:
             else:
                 throughput_results["udp_download"] = "Failed to parse"
                 logger.warning("Could not parse UDP download bandwidth")
-                logger.debug(f"UDP download output for debugging:\n{result}")
+                logger.info(f"UDP download output for debugging:\n{result}")
         else:
             throughput_results["udp_download"] = f"Error: {error}"
             logger.error(f"IPv4 UDP Download test failed: {error}")
 
         # Test 4: IPv4 UDP Upload with bandwidth limit
-        logger.info("\n--- Test 4: IPv4 UDP Upload (CPE → WAN) ---")
+        logger.info("\n--- Test 4: IPv4 UDP Upload (LAN Client → CPE → WAN) ---")
         result, used_port, error = run_iperf_with_retry("udp_upload", "-u -b 50M")
         if result:
             # For UDP, look for bandwidth on the summary line (may or may not have loss %)
@@ -692,7 +692,7 @@ class TestRdkCpeUseCases:
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
-                logger.debug(f"UDP output for debugging:\n{result}")
+                logger.info(f"UDP upload output for debugging:\n{result}")
         else:
             throughput_results["udp_upload"] = f"Error: {error}"
             logger.error(f"IPv4 UDP Upload test failed: {error}")
@@ -876,8 +876,8 @@ class TestRdkCpeUseCases:
             logger.error(error_msg)
             return None, None, error_msg
 
-        # Test 1: IPv6 TCP Download (Server → CPE)
-        logger.info("\n--- Test 1: IPv6 TCP Download (WAN → CPE) ---")
+        # Test 1: IPv6 TCP Download (WAN → CPE → LAN Client)
+        logger.info("\n--- Test 1: IPv6 TCP Download (WAN → CPE → LAN Client) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("tcp_download", "-R")
         if result:
             # For reverse mode (-R), look for "receiver" line in final summary
@@ -895,8 +895,8 @@ class TestRdkCpeUseCases:
             throughput_results["tcp_download"] = f"Error: {error}"
             logger.error(f"IPv6 TCP Download test failed: {error}")
 
-        # Test 2: IPv6 TCP Upload (CPE → Server)
-        logger.info("\n--- Test 2: IPv6 TCP Upload (CPE → WAN) ---")
+        # Test 2: IPv6 TCP Upload (LAN Client → CPE → WAN)
+        logger.info("\n--- Test 2: IPv6 TCP Upload (LAN Client → CPE → WAN) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("tcp_upload", "")
         if result:
             # For normal mode, look for "sender" line in final summary
@@ -915,7 +915,7 @@ class TestRdkCpeUseCases:
             logger.error(f"IPv6 TCP Upload test failed: {error}")
 
         # Test 3: IPv6 UDP Download with bandwidth limit (reverse mode)
-        logger.info("\n--- Test 3: IPv6 UDP Download (WAN → CPE) ---")
+        logger.info("\n--- Test 3: IPv6 UDP Download (WAN → CPE → LAN Client) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("udp_download", "-u -b 50M -R")
         if result:
             # For UDP reverse, look for receiver line with bandwidth
@@ -936,13 +936,13 @@ class TestRdkCpeUseCases:
             else:
                 throughput_results["udp_download"] = "Failed to parse"
                 logger.warning("Could not parse UDP download bandwidth")
-                logger.debug(f"UDP download output for debugging:\n{result}")
+                logger.info(f"UDP download output for debugging:\n{result}")
         else:
             throughput_results["udp_download"] = f"Error: {error}"
             logger.error(f"IPv6 UDP Download test failed: {error}")
 
         # Test 4: IPv6 UDP Upload with bandwidth limit
-        logger.info("\n--- Test 4: IPv6 UDP Upload (CPE → WAN) ---")
+        logger.info("\n--- Test 4: IPv6 UDP Upload (LAN Client → CPE → WAN) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("udp_upload", "-u -b 50M")
         if result:
             # For UDP, look for bandwidth on the summary line (may or may not have loss %)
@@ -963,7 +963,7 @@ class TestRdkCpeUseCases:
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
-                logger.debug(f"UDP output for debugging:\n{result}")
+                logger.info(f"UDP upload output for debugging:\n{result}")
         else:
             throughput_results["udp_upload"] = f"Error: {error}"
             logger.error(f"IPv6 UDP Upload test failed: {error}")
