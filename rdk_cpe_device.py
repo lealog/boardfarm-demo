@@ -532,6 +532,28 @@ class RdkSW(CPESwLibraries):  # pylint: disable=R0904
         """
         return self._hw.config.get("eRouter_Provisioning_mode", "ipv4")
 
+    def get_load_avg(self) -> float:
+        """Get 1-minute load average from /proc/loadavg.
+
+        :return: 1-minute load average
+        :rtype: float
+        """
+        try:
+            # Get load average and parse just the first value
+            output = self._console.execute_command("cat /proc/loadavg | cut -d' ' -f1", timeout=5)
+            # Strip any command echo and whitespace, get the last line which should be the value
+            lines = output.strip().split('\n')
+            load_str = lines[-1].strip()
+            return float(load_str)
+        except (ValueError, IndexError) as e:
+            _LOGGER.warning("Failed to parse load average: %s, output: %s", str(e), output)
+            # Fallback: try to extract any float from the output
+            import re
+            matches = re.findall(r'\d+\.\d+', output)
+            if matches:
+                return float(matches[-1])
+            raise
+
     def verify_cpe_is_booting(self) -> None:
         """Verify CPE is booting.
 
