@@ -554,6 +554,9 @@ class TestRdkCpeUseCases:
 
                         output = result.stdout + result.stderr
 
+                        # Debug: Log the actual output (first 1000 chars)
+                        logger.info(f"iperf3 output preview:\n{output[:1000]}")
+
                         # Check if server is busy
                         if "server is busy" in output.lower() or "unable to connect" in output.lower():
                             if attempt < max_retries_per_port:
@@ -781,6 +784,9 @@ class TestRdkCpeUseCases:
                         )
 
                         output = result.stdout + result.stderr
+
+                        # Debug: Log the actual output (first 1000 chars)
+                        logger.info(f"iperf3 output preview:\n{output[:1000]}")
 
                         # Check if server is busy
                         if "server is busy" in output.lower() or "unable to connect" in output.lower():
