@@ -113,6 +113,10 @@ class SSHConnection(BoardfarmPexpect):
 
             self._ssh_session.login(**login_kwargs)
 
+            # Update shell prompt to match what pxssh set
+            # When auto_prompt_reset=True, pxssh sets its own prompt
+            self._shell_prompt = self._ssh_session.PROMPT
+
             logger.info(f"Successfully connected to {self._ip_addr}")
 
         except pxssh.ExceptionPxssh as e:

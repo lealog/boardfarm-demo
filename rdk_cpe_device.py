@@ -198,9 +198,11 @@ class RdkRpiHW(CPEHW):
             )
 
         self._console.login_to_server()
-        # Clear any initial output
+        # Clear any initial output and wait for prompt
+        # After login_to_server, pxssh has set its own prompt
         self._console.sendline("")
-        self._console.expect(self._shell_prompt, timeout=5)
+        # Use the prompt that was set by pxssh during login
+        self._console.expect(self._console._shell_prompt, timeout=5)
 
     def get_console(self, console_name: str) -> BoardfarmPexpect:
         """Return console instance with the given name.
