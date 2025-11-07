@@ -537,6 +537,9 @@ class TestRdkCpeUseCases:
                         logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {cmd}")
                         result = board.command(cmd, timeout=test_duration + 30)
 
+                        # Debug: Log the actual output (first 500 chars)
+                        logger.info(f"iperf3 output preview: {result[:500] if len(result) > 500 else result}")
+
                         # Check if server is busy
                         if "server is busy" in result.lower() or "unable to connect" in result.lower():
                             if attempt < max_retries_per_port:
@@ -546,6 +549,15 @@ class TestRdkCpeUseCases:
                             else:
                                 logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
                                 break  # Try next port
+
+                        # Check if we got valid iperf output
+                        if "bits/sec" not in result.lower() and "connecting to host" not in result.lower():
+                            logger.warning(f"Unexpected iperf3 output on port {port}, retrying...")
+                            if attempt < max_retries_per_port:
+                                time.sleep(2)
+                                continue
+                            else:
+                                break
 
                         # Successfully got result
                         logger.info(f"✓ Successfully connected using port {port}")
