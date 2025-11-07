@@ -168,6 +168,19 @@ class RdkRpiHW(CPEHW):
                 save_console_logs=self._cmdline_args.save_console_logs,
                 shell_prompt=self._shell_prompt,
             )
+        elif connection_type == "ssh":
+            # SSH connection with specific parameters
+            self._console = connection_factory(
+                connection_type="ssh",
+                connection_name=f"{device_name}.console",
+                ip_addr=self._config.get("ip_addr"),
+                port=self._config.get("port", 22),
+                username=self._config.get("username", "root"),
+                password=self._config.get("password"),
+                ssh_key=self._config.get("ssh_key"),
+                shell_prompt=self._shell_prompt,
+                save_console_logs=self._cmdline_args.save_console_logs,
+            )
         else:
             # Support for other connection types if needed
             self._console = connection_factory(

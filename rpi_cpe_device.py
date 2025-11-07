@@ -19,7 +19,7 @@ class RpiCpeDevice(BoardfarmDevice):
         self.prompt = config.get("prompt", "root@RaspberryPi-Gateway")
 
     def connect_to_consoles(self, device_name):
-        """Connect to device console using ser2net.
+        """Connect to device console using ser2net or SSH.
 
         :param device_name: name of the device
         """
@@ -28,6 +28,9 @@ class RpiCpeDevice(BoardfarmDevice):
             connection_name=f"{device_name}.console",
             ip_addr=self._config.get("ip_addr"),
             port=self._config.get("port"),
+            username=self._config.get("username"),
+            password=self._config.get("password"),
+            ssh_key=self._config.get("ssh_key"),
             shell_prompt=self._config.get("shell_prompt", self.prompt),
             save_console_logs=getattr(self._cmdline_args, 'save_console_logs', None),
         )
