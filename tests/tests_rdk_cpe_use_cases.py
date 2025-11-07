@@ -655,7 +655,8 @@ class TestRdkCpeUseCases:
                 unit = bw_match.group(2) or ""
 
                 # Try to find packet loss percentage on receiver line
-                loss_match = re.search(r'receiver.*?(\d+)/(\d+)\s+\((\d+\.?\d*)%\)', result, re.IGNORECASE)
+                # Format: "59.7 MBytes  50.1 Mbits/sec  0.123 ms  81/43586 (0.19%)  receiver"
+                loss_match = re.search(r'(\d+)/(\d+)\s+\((\d+\.?\d*)%\).*receiver', result, re.IGNORECASE)
                 if loss_match:
                     loss = loss_match.group(3)
                     throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
@@ -682,10 +683,11 @@ class TestRdkCpeUseCases:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
 
-                # Try to find packet loss percentage
-                loss_match = re.search(r'\((\d+\.?\d*)%\)', result)
+                # Try to find packet loss percentage on sender line
+                # Format: "59.6 MBytes  50.0 Mbits/sec  0.000 ms  0/43399 (0%)  sender"
+                loss_match = re.search(r'(\d+)/(\d+)\s+\((\d+\.?\d*)%\).*sender', result, re.IGNORECASE)
                 if loss_match:
-                    loss = loss_match.group(1)
+                    loss = loss_match.group(3)
                     throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
                     logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
                 else:
@@ -950,7 +952,8 @@ class TestRdkCpeUseCases:
                 unit = bw_match.group(2) or ""
 
                 # Try to find packet loss percentage on receiver line
-                loss_match = re.search(r'receiver.*?(\d+)/(\d+)\s+\((\d+\.?\d*)%\)', result, re.IGNORECASE)
+                # Format: "59.7 MBytes  50.1 Mbits/sec  0.123 ms  81/43586 (0.19%)  receiver"
+                loss_match = re.search(r'(\d+)/(\d+)\s+\((\d+\.?\d*)%\).*receiver', result, re.IGNORECASE)
                 if loss_match:
                     loss = loss_match.group(3)
                     throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
