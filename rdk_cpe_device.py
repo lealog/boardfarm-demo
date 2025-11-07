@@ -133,10 +133,16 @@ class RdkRpiHW(CPEHW):
         :rtype: list[str]
         """
         prompt = self._config.get("shell_prompt", "root@RaspberryPi-Gateway")
-        # Escape special regex characters and create more flexible patterns
+        # If prompt contains regex special chars like .* or \$, assume it's already a regex
+        # Otherwise, treat it as a literal string that needs escaping
         import re
-        escaped_prompt = re.escape(prompt)
-        return [f"{escaped_prompt}.*#\\s*", f"{escaped_prompt}.*\\$\\s*", "/ #"]
+        if any(char in prompt for char in ['.*', '\\', '[', ']', '(', ')', '+', '?']):
+            # Already a regex pattern, use as-is
+            return [prompt]
+        else:
+            # Literal string, escape and create flexible patterns
+            escaped_prompt = re.escape(prompt)
+            return [f"{escaped_prompt}.*#\\s*", f"{escaped_prompt}.*\\$\\s*", "/ #"]
 
     def connect_to_consoles(self, device_name: str) -> None:
         """Establish connection to the device console.
