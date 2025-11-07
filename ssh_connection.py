@@ -93,8 +93,18 @@ class SSHConnection(BoardfarmPexpect):
 
             # Set prompt pattern
             if self._shell_prompt:
-                # Convert shell_prompt list to a single regex pattern
-                prompt_pattern = '|'.join(self._shell_prompt)
+                # Flatten shell_prompt if it's a list of lists, then join
+                if isinstance(self._shell_prompt, list):
+                    # Flatten any nested lists
+                    flat_prompts = []
+                    for item in self._shell_prompt:
+                        if isinstance(item, list):
+                            flat_prompts.extend(item)
+                        else:
+                            flat_prompts.append(item)
+                    prompt_pattern = '|'.join(flat_prompts)
+                else:
+                    prompt_pattern = self._shell_prompt
                 self._ssh_session.PROMPT = prompt_pattern
 
             # Connect to device
@@ -230,11 +240,14 @@ class SSHConnection(BoardfarmPexpect):
                 self._ssh_session.close()
             except Exception as e:
                 logger.warning(f"Error closing SSH session: {e}")
-        super().close()
+        # Don't call super().close() as it tries to access ptyproc which doesn't exist in pxssh
 
     def __del__(self) -> None:
         """Cleanup on deletion."""
-        self.close()
+        try:
+            self.close()
+        except:
+            pass
 
     def isalive(self) -> bool:
         """Check if SSH connection is alive.
@@ -242,5 +255,9 @@ class SSHConnection(BoardfarmPexpect):
         :return: True if connection is alive, False otherwise
         """
         if self._ssh_session:
-            return self._ssh_session.isalive()
+            try:
+                # pxssh doesn't have ptyproc, use its own isalive which checks the process
+                return self._ssh_session.isalive()
+            except (AttributeError, Exception):
+                return False
         return False
