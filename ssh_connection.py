@@ -91,22 +91,6 @@ class SSHConnection(BoardfarmPexpect):
                 codec_errors='ignore'
             )
 
-            # Set prompt pattern
-            if self._shell_prompt:
-                # Flatten shell_prompt if it's a list of lists, then join
-                if isinstance(self._shell_prompt, list):
-                    # Flatten any nested lists
-                    flat_prompts = []
-                    for item in self._shell_prompt:
-                        if isinstance(item, list):
-                            flat_prompts.extend(item)
-                        else:
-                            flat_prompts.append(item)
-                    prompt_pattern = '|'.join(flat_prompts)
-                else:
-                    prompt_pattern = self._shell_prompt
-                self._ssh_session.PROMPT = prompt_pattern
-
             # Connect to device
             logger.info(f"Connecting to {self._username}@{self._ip_addr}:{self._port}")
 
@@ -114,10 +98,11 @@ class SSHConnection(BoardfarmPexpect):
                 'server': self._ip_addr,
                 'username': self._username,
                 'port': self._port,
-                'auto_prompt_reset': False,
-                'sync_multiplier': 1,
+                'auto_prompt_reset': True,  # Let pxssh handle the prompt
+                'sync_multiplier': 3,
+                'login_timeout': 30,
             }
-
+            
             # Use SSH key if provided, otherwise use password
             if self._ssh_key:
                 login_kwargs['ssh_key'] = self._ssh_key
