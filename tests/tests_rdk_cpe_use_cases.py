@@ -554,8 +554,8 @@ class TestRdkCpeUseCases:
 
                         output = result.stdout + result.stderr
 
-                        # Debug: Log the actual output (first 1000 chars)
-                        logger.info(f"iperf3 output preview:\n{output[:1000]}")
+                        # Debug: Log the actual output (show full output for debugging)
+                        logger.debug(f"iperf3 full output:\n{output}")
 
                         # Check if server is busy
                         if "server is busy" in output.lower() or "unable to connect" in output.lower():
@@ -606,7 +606,9 @@ class TestRdkCpeUseCases:
         logger.info("\n--- Test 1: IPv4 TCP Download (WAN → CPE) ---")
         result, used_port, error = run_iperf_with_retry("tcp_download", "-R")
         if result:
-            bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            # For reverse mode (-R), look for "receiver" line in final summary
+            # Match: "91.6 Mbits/sec                  receiver"
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -623,7 +625,9 @@ class TestRdkCpeUseCases:
         logger.info("\n--- Test 2: IPv4 TCP Upload (CPE → WAN) ---")
         result, used_port, error = run_iperf_with_retry("tcp_upload", "")
         if result:
-            bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            # For normal mode, look for "sender" line in final summary
+            # Match: "94.0 Mbits/sec    0             sender"
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?sender', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -785,8 +789,8 @@ class TestRdkCpeUseCases:
 
                         output = result.stdout + result.stderr
 
-                        # Debug: Log the actual output (first 1000 chars)
-                        logger.info(f"iperf3 output preview:\n{output[:1000]}")
+                        # Debug: Log the actual output (show full output for debugging)
+                        logger.debug(f"iperf3 full output:\n{output}")
 
                         # Check if server is busy
                         if "server is busy" in output.lower() or "unable to connect" in output.lower():
@@ -837,7 +841,9 @@ class TestRdkCpeUseCases:
         logger.info("\n--- Test 1: IPv6 TCP Download (WAN → CPE) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("tcp_download", "-R")
         if result:
-            bw_match = re.search(r'receiver.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            # For reverse mode (-R), look for "receiver" line in final summary
+            # Match: "91.6 Mbits/sec                  receiver"
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -854,7 +860,9 @@ class TestRdkCpeUseCases:
         logger.info("\n--- Test 2: IPv6 TCP Upload (CPE → WAN) ---")
         result, used_port, error = run_iperf_ipv6_with_retry("tcp_upload", "")
         if result:
-            bw_match = re.search(r'sender.*?([0-9.]+)\s+([KMGT]?)bits/sec', result, re.IGNORECASE)
+            # For normal mode, look for "sender" line in final summary
+            # Match: "94.0 Mbits/sec    0             sender"
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?sender', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
