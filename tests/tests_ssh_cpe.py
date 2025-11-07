@@ -1,9 +1,12 @@
 """Tests for SSH CPE devices."""
 
+import logging
 import pytest
 from boardfarm3.lib.device_manager import DeviceManager
 from rpi_cpe_device import RpiCpeDevice
 from rdk_cpe_device import RdkCpeDevice
+
+logger = logging.getLogger(__name__)
 
 
 def get_cpe_device(device_manager: DeviceManager):
@@ -28,12 +31,12 @@ def test_ssh_cpe_connection(device_manager: DeviceManager):
     and execute basic commands.
     """
     cpe = get_cpe_device(device_manager)
-    print(f"Got device: {cpe}")
+    logger.info(f"Got device: {cpe}")
 
     # Test basic command execution
     output = cpe.command("echo 'SSH CPE is connected'")
     assert "SSH CPE is connected" in output
-    print(f"Connection test passed: {output}")
+    logger.info(f"Connection test passed: {output}")
 
 
 def test_ssh_cpe_system_info(device_manager: DeviceManager):
@@ -43,17 +46,17 @@ def test_ssh_cpe_system_info(device_manager: DeviceManager):
     # Get system hostname
     hostname = cpe.command("hostname")
     assert hostname, "Failed to get hostname"
-    print(f"Hostname: {hostname}")
+    logger.info(f"Hostname: {hostname}")
 
     # Get kernel version
     kernel = cpe.command("uname -r")
     assert kernel, "Failed to get kernel version"
-    print(f"Kernel: {kernel}")
+    logger.info(f"Kernel: {kernel}")
 
     # Get uptime
     uptime = cpe.command("uptime")
     assert uptime, "Failed to get uptime"
-    print(f"Uptime: {uptime}")
+    logger.info(f"Uptime: {uptime}")
 
 
 def test_ssh_cpe_network_info(device_manager: DeviceManager):
@@ -63,12 +66,12 @@ def test_ssh_cpe_network_info(device_manager: DeviceManager):
     # Get IP addresses
     ip_info = cpe.command("ip addr show")
     assert ip_info, "Failed to get IP information"
-    print(f"IP Info:\n{ip_info}")
+    logger.info(f"IP Info:\n{ip_info}")
 
     # Get routing table
     routes = cpe.command("ip route show")
     assert routes, "Failed to get routing table"
-    print(f"Routes:\n{routes}")
+    logger.info(f"Routes:\n{routes}")
 
 
 def test_ssh_rdk_cpe_connection(device_manager: DeviceManager):
@@ -82,7 +85,7 @@ def test_ssh_rdk_cpe_connection(device_manager: DeviceManager):
     # Test basic command execution
     output = cpe.command("echo 'SSH RDK CPE is connected'")
     assert "SSH RDK CPE is connected" in output
-    print(f"RDK CPE connection test passed: {output}")
+    logger.info(f"RDK CPE connection test passed: {output}")
 
 
 @pytest.mark.slow
@@ -97,17 +100,17 @@ def test_ssh_rdk_cpe_hardware_info(device_manager: DeviceManager):
     # Test hardware properties
     try:
         serial = cpe.hw.serial_number
-        print(f"Serial Number: {serial}")
+        logger.info(f"Serial Number: {serial}")
         assert serial, "Failed to get serial number"
     except Exception as e:
-        print(f"Warning: Could not get serial number: {e}")
+        logger.info(f"Warning: Could not get serial number: {e}")
 
     try:
         mac = cpe.hw.mac_address
-        print(f"MAC Address: {mac}")
+        logger.info(f"MAC Address: {mac}")
         assert mac, "Failed to get MAC address"
     except Exception as e:
-        print(f"Warning: Could not get MAC address: {e}")
+        logger.info(f"Warning: Could not get MAC address: {e}")
 
 
 @pytest.mark.slow
@@ -131,18 +134,18 @@ def test_ssh_rdk_cpe_dmcli_integration(device_manager: DeviceManager):
     try:
         # Get device model name via DMCLI
         model = cpe.get_device_model_name()
-        print(f"Device Model (via DMCLI): {model}")
+        logger.info(f"Device Model (via DMCLI): {model}")
 
         # Get device serial number via DMCLI
         serial = cpe.get_device_serial_number()
-        print(f"Device Serial (via DMCLI): {serial}")
+        logger.info(f"Device Serial (via DMCLI): {serial}")
 
         # Get software version via DMCLI
         version = cpe.get_device_software_version()
-        print(f"Software Version (via DMCLI): {version}")
+        logger.info(f"Software Version (via DMCLI): {version}")
 
     except Exception as e:
-        print(f"Warning: DMCLI operations failed: {e}")
+        logger.info(f"Warning: DMCLI operations failed: {e}")
         pytest.skip(f"DMCLI not fully functional: {e}")
 
 
@@ -160,7 +163,7 @@ def test_ssh_cpe_file_operations(device_manager: DeviceManager):
     # Read from file
     content = cpe.command(f"cat {test_file}")
     assert test_content in content, "File content mismatch"
-    print(f"File operation test passed: {content}")
+    logger.info(f"File operation test passed: {content}")
 
     # Clean up
     cpe.command(f"rm -f {test_file}")
@@ -175,7 +178,7 @@ def test_ssh_cpe_process_list(device_manager: DeviceManager):
     assert processes, "Failed to get process list"
     # BusyBox ps output may not have PID header, just check for process output
     assert len(processes.strip()) > 0, "No process output"
-    print(f"Process list (top 20):\n{processes}")
+    logger.info(f"Process list (top 20):\n{processes}")
 
 
 def test_ssh_cpe_memory_info(device_manager: DeviceManager):
@@ -186,7 +189,7 @@ def test_ssh_cpe_memory_info(device_manager: DeviceManager):
     mem_info = cpe.command("free -h")
     assert mem_info, "Failed to get memory information"
     assert "Mem:" in mem_info, "Invalid memory info format"
-    print(f"Memory Info:\n{mem_info}")
+    logger.info(f"Memory Info:\n{mem_info}")
 
 
 def test_ssh_cpe_disk_usage(device_manager: DeviceManager):
@@ -197,4 +200,4 @@ def test_ssh_cpe_disk_usage(device_manager: DeviceManager):
     disk_info = cpe.command("df -h")
     assert disk_info, "Failed to get disk usage"
     assert "Filesystem" in disk_info or "/" in disk_info, "Invalid disk info format"
-    print(f"Disk Usage:\n{disk_info}")
+    logger.info(f"Disk Usage:\n{disk_info}")
