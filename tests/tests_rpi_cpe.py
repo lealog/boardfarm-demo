@@ -1,6 +1,9 @@
+import logging
 import pytest
 from boardfarm3.lib.device_manager import DeviceManager
 from rpi_cpe_device import RpiCpeDevice
+
+logger = logging.getLogger(__name__)
 
 
 def test_cpe_connection(device_manager: DeviceManager):
@@ -10,7 +13,7 @@ def test_cpe_connection(device_manager: DeviceManager):
     assert len(devices) > 0, "No rpi_cpe devices found"
 
     cpe = list(devices.values())[0]  # Get the first (and only) rpi_cpe device
-    print(f"Got device: {cpe}")
+    logger.info(f"Got device: {cpe}")
 
     # Test basic connection by running uname command
     output = cpe.command("uname -a")
@@ -18,7 +21,7 @@ def test_cpe_connection(device_manager: DeviceManager):
     # Verify the output contains expected information
     assert "Linux" in output
     assert "RaspberryPi-Gateway" in output
-    print(f"System info: {[line.strip() for line in output.split() if 'Linux' in line and 'RaspberryPi-Gateway' in line]}")
+    logger.info(f"System info: {[line.strip() for line in output.split() if 'Linux' in line and 'RaspberryPi-Gateway' in line]}")
 
 
 def test_cpe_system_info(device_manager: DeviceManager):

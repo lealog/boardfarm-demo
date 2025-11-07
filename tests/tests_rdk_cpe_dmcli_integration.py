@@ -1,9 +1,12 @@
 """Integration tests for RDK CPE Device with DMCLI library."""
 
+import logging
 import pytest
 from boardfarm3.lib.device_manager import DeviceManager
 from rdk_cpe_device import RdkCpeDevice
 from shared.lib.dmcli import DMCLIAPI, DMCLIError
+
+logger = logging.getLogger(__name__)
 
 
 class TestRdkCpeDmcliIntegration:
@@ -26,7 +29,7 @@ class TestRdkCpeDmcliIntegration:
         # Get device serial number
         try:
             result = dmcli.GPV("Device.DeviceInfo.SerialNumber")
-            print(f"Serial Number: {result.rval} (type: {result.rtype})")
+            logger.info(f"Serial Number: {result.rval} (type: {result.rtype})")
             assert "succeed" in result.status
             assert result.rtype in ["string", "hexBinary"]
             assert len(result.rval) > 0
@@ -41,7 +44,7 @@ class TestRdkCpeDmcliIntegration:
 
         try:
             result = dmcli.GPV("Device.DeviceInfo.SoftwareVersion")
-            print(f"Software Version: {result.rval}")
+            logger.info(f"Software Version: {result.rval}")
             assert "succeed" in result.status
             assert result.rtype == "string"
             assert len(result.rval) > 0
@@ -56,7 +59,7 @@ class TestRdkCpeDmcliIntegration:
 
         try:
             result = dmcli.GPV("Device.DeviceInfo.ModelName")
-            print(f"Model Name: {result.rval}")
+            logger.info(f"Model Name: {result.rval}")
             assert "succeed" in result.status
             assert result.rtype == "string"
             assert len(result.rval) > 0
@@ -71,7 +74,7 @@ class TestRdkCpeDmcliIntegration:
 
         try:
             result = dmcli.GPV("Device.DeviceInfo.UpTime")
-            print(f"Uptime: {result.rval} seconds")
+            logger.info(f"Uptime: {result.rval} seconds")
             assert "succeed" in result.status
             assert result.rtype in ["unsignedInt", "uint32", "int", "uint"]
 
@@ -90,12 +93,12 @@ class TestRdkCpeDmcliIntegration:
         try:
             # Get number of Ethernet interfaces
             result = dmcli.GPV("Device.Ethernet.InterfaceNumberOfEntries")
-            print(f"Number of Ethernet Interfaces: {result.rval}")
+            logger.info(f"Number of Ethernet Interfaces: {result.rval}")
             assert "succeed" in result.status
 
             # Try to get status of first interface
             result = dmcli.GPV("Device.Ethernet.Interface.1.Status")
-            print(f"Ethernet Interface 1 Status: {result.rval}")
+            logger.info(f"Ethernet Interface 1 Status: {result.rval}")
             assert result.rval in ["Up", "Down", "Unknown", "Dormant", "NotPresent", "LowerLayerDown"]
         except DMCLIError as e:
             pytest.skip(f"Ethernet interface parameters not available: {e}")
@@ -109,14 +112,14 @@ class TestRdkCpeDmcliIntegration:
         try:
             # Check if WiFi radio is enabled
             result = dmcli.GPV("Device.WiFi.Radio.1.Enable")
-            print(f"WiFi Radio 1 Enabled: {result.rval}")
+            logger.info(f"WiFi Radio 1 Enabled: {result.rval}")
             assert "succeed" in result.status
             assert result.rtype in ["bool", "boolean"]
             assert result.rval in ["true", "false", "0", "1"]
 
             # Get WiFi SSID
             result = dmcli.GPV("Device.WiFi.SSID.1.SSID")
-            print(f"WiFi SSID: {result.rval}")
+            logger.info(f"WiFi SSID: {result.rval}")
             assert result.rtype == "string"
         except DMCLIError as e:
             pytest.skip(f"WiFi parameters not available: {e}")
@@ -131,7 +134,7 @@ class TestRdkCpeDmcliIntegration:
             # Try to set a harmless parameter (device alias/name)
             # First get the current value
             original = dmcli.GPV("Device.DeviceInfo.X_RDKCENTRAL-COM_DeviceAlias")
-            print(f"Original Device Alias: {original.rval}")
+            logger.info(f"Original Device Alias: {original.rval}")
 
             # Set a test value
             test_alias = "TestDevice_DMCLI"
@@ -141,7 +144,7 @@ class TestRdkCpeDmcliIntegration:
             # Verify the change
             new_value = dmcli.GPV("Device.DeviceInfo.X_RDKCENTRAL-COM_DeviceAlias")
             assert new_value.rval == test_alias
-            print(f"Successfully set Device Alias to: {new_value.rval}")
+            logger.info(f"Successfully set Device Alias to: {new_value.rval}")
 
             # Restore original value
             dmcli.SPV("Device.DeviceInfo.X_RDKCENTRAL-COM_DeviceAlias", original.rval, "string")
@@ -173,15 +176,15 @@ class TestRdkCpeDmcliIntegration:
                     "type": result.rtype,
                     "status": result.status
                 }
-                print(f"{param}: {result.rval} ({result.rtype})")
+                logger.info(f"{param}: {result.rval} ({result.rtype})")
             except DMCLIError as e:
                 results[param] = {"error": str(e)}
-                print(f"{param}: Error - {e}")
+                logger.info(f"{param}: Error - {e}")
 
         # At least some parameters should be available
         successful_params = [p for p in results if "error" not in results[p]]
         assert len(successful_params) > 0, "No DMCLI parameters were successfully retrieved"
-        print(f"\nSuccessfully retrieved {len(successful_params)}/{len(parameters_to_check)} parameters")
+        logger.info(f"\nSuccessfully retrieved {len(successful_params)}/{len(parameters_to_check)} parameters")
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -193,7 +196,7 @@ class TestRdkCpeDmcliIntegration:
         try:
             # Try to add a new WiFi AccessPoint object
             result = dmcli.AddObject("Device.WiFi.AccessPoint.")
-            print(f"Added new AccessPoint with index: {result.rval}")
+            logger.info(f"Added new AccessPoint with index: {result.rval}")
             assert "succeed" in result.status
 
             new_ap_index = result.rval
@@ -205,7 +208,7 @@ class TestRdkCpeDmcliIntegration:
             # Delete the object we created
             result = dmcli.DelObject(new_ap_path)
             assert "succeed" in result.status
-            print(f"Successfully deleted AccessPoint {new_ap_index}")
+            logger.info(f"Successfully deleted AccessPoint {new_ap_index}")
 
         except DMCLIError as e:
             pytest.skip(f"Add/Delete object operations not supported: {e}")
@@ -222,7 +225,7 @@ class TestRdkCpeDmcliIntegration:
 
         assert "execution failed" in str(exc_info.value).lower() or \
                "can't find" in str(exc_info.value).lower()
-        print(f"Expected error caught: {exc_info.value}")
+        logger.info(f"Expected error caught: {exc_info.value}")
 
         # Test setting read-only parameter
         try:

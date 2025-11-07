@@ -5,12 +5,15 @@ CPE device testing, including system monitoring, networking validation,
 and service status checks.
 """
 
+import logging
 import pytest
 from boardfarm3.lib.device_manager import DeviceManager
 from boardfarm3.use_cases import cpe as cpe_use_cases
 from boardfarm3.use_cases import iperf as iperf_use_cases
 from boardfarm3.use_cases import networking as networking_use_cases
 from rdk_cpe_device import RdkCpeDevice
+
+logger = logging.getLogger(__name__)
 
 
 class TestRdkCpeUseCases:
@@ -38,7 +41,7 @@ class TestRdkCpeUseCases:
         assert isinstance(cpu_usage, (int, float)), "CPU usage should be numeric"
         assert 0.0 <= cpu_usage <= 100.0, f"CPU usage {cpu_usage}% should be between 0-100%"
 
-        print(f"Current CPU usage: {cpu_usage}%")
+        logger.info(f"Current CPU usage: {cpu_usage}%")
 
     @pytest.mark.integration
     def test_memory_usage_monitoring(self, device_manager: DeviceManager):
@@ -62,7 +65,7 @@ class TestRdkCpeUseCases:
                 assert isinstance(memory_info[field], int), f"{field} should be an integer"
                 assert memory_info[field] >= 0, f"{field} should be non-negative"
 
-        print(f"Memory usage: {memory_info}")
+        logger.info(f"Memory usage: {memory_info}")
 
     @pytest.mark.integration
     def test_system_uptime_monitoring(self, device_manager: DeviceManager):
@@ -84,7 +87,7 @@ class TestRdkCpeUseCases:
         hours = uptime_seconds // 3600
         minutes = (uptime_seconds % 3600) // 60
 
-        print(f"System uptime: {uptime_seconds:.1f} seconds ({hours:.0f}h {minutes:.0f}m)")
+        logger.info(f"System uptime: {uptime_seconds:.1f} seconds ({hours:.0f}h {minutes:.0f}m)")
 
     @pytest.mark.integration
     def test_provisioning_mode_check(self, device_manager: DeviceManager):
@@ -104,11 +107,11 @@ class TestRdkCpeUseCases:
 
         # Check for expected modes
         valid_modes = ["ipv4", "ipv6", "dual", "bridge"]
-        print(f"Provisioning mode: {provisioning_mode}")
+        logger.info(f"Provisioning mode: {provisioning_mode}")
 
         # This is informational - different devices may have different valid modes
         if provisioning_mode.lower() in valid_modes:
-            print(f"✓ Standard provisioning mode detected: {provisioning_mode}")
+            logger.info(f"✓ Standard provisioning mode detected: {provisioning_mode}")
 
     @pytest.mark.integration
     def test_tr069_agent_status(self, device_manager: DeviceManager):
@@ -125,13 +128,13 @@ class TestRdkCpeUseCases:
         # Validate result
         assert isinstance(is_tr069_running, bool), "TR069 status should be boolean"
 
-        print(f"TR069 agent running: {is_tr069_running}")
+        logger.info(f"TR069 agent running: {is_tr069_running}")
 
         # This is informational - TR069 may or may not be running depending on configuration
         if is_tr069_running:
-            print("✓ TR069 management agent is active")
+            logger.info("✓ TR069 management agent is active")
         else:
-            print("ℹ TR069 management agent is not running (may be expected)")
+            logger.info("ℹ TR069 management agent is not running (may be expected)")
 
     @pytest.mark.integration
     def test_ntp_synchronization_status(self, device_manager: DeviceManager):
@@ -148,13 +151,13 @@ class TestRdkCpeUseCases:
         # Validate result
         assert isinstance(is_ntp_synced, bool), "NTP sync status should be boolean"
 
-        print(f"NTP synchronized: {is_ntp_synced}")
+        logger.info(f"NTP synchronized: {is_ntp_synced}")
 
         # This is informational - NTP sync depends on network connectivity and configuration
         if is_ntp_synced:
-            print("✓ System time is synchronized via NTP")
+            logger.info("✓ System time is synchronized via NTP")
         else:
-            print("ℹ System time is not NTP synchronized (may need network access)")
+            logger.info("ℹ System time is not NTP synchronized (may need network access)")
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -188,12 +191,12 @@ class TestRdkCpeUseCases:
 
                 if "1 packets transmitted, 1 received" in result or "1 received" in result:
                     successful_pings += 1
-                    print(f"✓ Basic ping functionality verified (target: {target})")
+                    logger.info(f"✓ Basic ping functionality verified (target: {target})")
                 else:
-                    print(f"ℹ Ping test to {target} - network connectivity may be limited")
+                    logger.info(f"ℹ Ping test to {target} - network connectivity may be limited")
 
             except Exception as e:
-                print(f"ℹ Ping test to {target} failed: {str(e)} - this may be expected in isolated test environment")
+                logger.info(f"ℹ Ping test to {target} failed: {str(e)} - this may be expected in isolated test environment")
 
         # At least basic loopback should work
         assert successful_pings >= 0, "At least basic network functionality should be available"
@@ -241,10 +244,10 @@ class TestRdkCpeUseCases:
             health_report["ntp_synced"] = f"Error: {e}"
 
         # Print comprehensive health report
-        print("\n=== System Health Report ===")
+        logger.info("\n=== System Health Report ===")
         for key, value in health_report.items():
-            print(f"{key}: {value}")
-        print("===========================\n")
+            logger.info(f"{key}: {value}")
+        logger.info("===========================\n")
 
         # Validate that we got at least some successful metrics
         successful_metrics = sum(1 for value in health_report.values()
@@ -284,16 +287,16 @@ class TestRdkCpeUseCases:
         for name, test_func in use_case_tests:
             try:
                 result = test_func()
-                print(f"✓ {name}: {result}")
+                logger.info(f"✓ {name}: {result}")
             except Exception as e:
                 error_scenarios.append(f"{name}: {str(e)}")
-                print(f"✗ {name}: Error - {str(e)}")
+                logger.info(f"✗ {name}: Error - {str(e)}")
 
         # Report error scenarios (informational)
         if error_scenarios:
-            print(f"\nError scenarios encountered ({len(error_scenarios)} out of {len(use_case_tests)}):")
+            logger.info(f"\nError scenarios encountered ({len(error_scenarios)} out of {len(use_case_tests)}):")
             for error in error_scenarios:
-                print(f"  - {error}")
+                logger.info(f"  - {error}")
 
         # This test is primarily informational - use cases should handle errors gracefully
         # We expect at least some use cases to work
@@ -311,30 +314,30 @@ class TestRdkCpeUseCases:
         """
         board = self._get_board(device_manager)
 
-        print("\n=== Real Boardfarm3 iPerf Use Case Test ===")
+        logger.info("\n=== Real Boardfarm3 iPerf Use Case Test ===")
 
         # Check if iperf3 is available on the device
         try:
             result = board.command("which iperf3", timeout=10)
             if not result.strip() or "/iperf3" not in result:
-                print("ℹ iperf3 not available, installing...")
+                logger.info("ℹ iperf3 not available, installing...")
                 # Try to install iperf3 if not available
                 try:
                     board.command("apt-get update && apt-get install -y iperf3", timeout=60)
-                    print("✓ iperf3 installed successfully")
+                    logger.info("✓ iperf3 installed successfully")
                 except Exception as e:
-                    print(f"✗ Failed to install iperf3: {e}")
-                    print("ℹ Skipping iperf use case test - iperf3 not available")
+                    logger.info(f"✗ Failed to install iperf3: {e}")
+                    logger.info("ℹ Skipping iperf use case test - iperf3 not available")
                     return
             else:
-                print("✓ iperf3 is available on the device")
+                logger.info("✓ iperf3 is available on the device")
         except Exception as e:
-            print(f"✗ Error checking iperf3 availability: {e}")
-            print("ℹ Skipping iperf use case test")
+            logger.info(f"✗ Error checking iperf3 availability: {e}")
+            logger.info("ℹ Skipping iperf use case test")
             return
 
         try:
-            print("🚀 Running actual boardfarm3 iperf use case...")
+            logger.info("🚀 Running actual boardfarm3 iperf use case...")
 
             # Since our CPE device now has LinuxDevice traffic methods,
             # we can use it as both source and destination for iperf testing
@@ -352,19 +355,19 @@ class TestRdkCpeUseCases:
                 destination_ip="127.0.0.1",    # Loopback test
             )
 
-            print("✓ iPerf traffic generator created successfully")
-            print(f"Traffic generator type: {type(traffic_generator)}")
-            print(f"Traffic generator attributes: {dir(traffic_generator)}")
+            logger.info("✓ iPerf traffic generator created successfully")
+            logger.info(f"Traffic generator type: {type(traffic_generator)}")
+            logger.info(f"Traffic generator attributes: {dir(traffic_generator)}")
 
             # Use the actual attributes available on the traffic generator
-            print(f"Traffic sender: {traffic_generator.traffic_sender}")
-            print(f"Traffic receiver: {traffic_generator.traffic_receiver}")
-            print(f"Sender PID: {traffic_generator.sender_pid}")
-            print(f"Receiver PID: {traffic_generator.receiver_pid}")
+            logger.info(f"Traffic sender: {traffic_generator.traffic_sender}")
+            logger.info(f"Traffic receiver: {traffic_generator.traffic_receiver}")
+            logger.info(f"Sender PID: {traffic_generator.sender_pid}")
+            logger.info(f"Receiver PID: {traffic_generator.receiver_pid}")
 
             # Wait for the test to complete
             import time
-            print("⏳ Waiting for iperf test to complete...")
+            logger.info("⏳ Waiting for iperf test to complete...")
             time.sleep(7)  # Wait a bit longer than the test duration
 
             # Get the results by reading the log files if available
@@ -375,7 +378,7 @@ class TestRdkCpeUseCases:
                     server_log = board.command(f"cat {traffic_generator.server_log_file}", timeout=10)
                     if server_log and "bits/sec" in server_log:
                         performance_results["server_log"] = "Available"
-                        print("✓ Server log contains performance data")
+                        logger.info("✓ Server log contains performance data")
                 except Exception:
                     performance_results["server_log"] = "Not available"
 
@@ -384,7 +387,7 @@ class TestRdkCpeUseCases:
                     client_log = board.command(f"cat {traffic_generator.client_log_file}", timeout=10)
                     if client_log and "bits/sec" in client_log:
                         performance_results["client_log"] = "Available"
-                        print("✓ Client log contains performance data")
+                        logger.info("✓ Client log contains performance data")
 
                         # Try to parse bandwidth from client log
                         import re
@@ -393,7 +396,7 @@ class TestRdkCpeUseCases:
                             bandwidth = float(bw_match.group(1))
                             unit = bw_match.group(2) or ""
                             performance_results["bandwidth"] = f"{bandwidth} {unit}bits/sec"
-                            print(f"🎯 Measured bandwidth: {bandwidth} {unit}bits/sec")
+                            logger.info(f"🎯 Measured bandwidth: {bandwidth} {unit}bits/sec")
                 except Exception:
                     performance_results["client_log"] = "Not available"
 
@@ -402,10 +405,10 @@ class TestRdkCpeUseCases:
                 # Import the stop function
                 from boardfarm3.use_cases.iperf import stop_iperf_traffic
                 stop_iperf_traffic(traffic_generator)
-                print("✓ iPerf traffic stopped successfully")
+                logger.info("✓ iPerf traffic stopped successfully")
                 performance_results["cleanup"] = "Success"
             except Exception as e:
-                print(f"ℹ Traffic cleanup attempt: {e}")
+                logger.info(f"ℹ Traffic cleanup attempt: {e}")
                 # Try manual cleanup
                 try:
                     board.command("pkill -f iperf3", timeout=5)
@@ -414,10 +417,10 @@ class TestRdkCpeUseCases:
                     performance_results["cleanup"] = "Failed"
 
             # Print results summary
-            print("\n=== Boardfarm3 iPerf Use Case Results ===")
+            logger.info("\n=== Boardfarm3 iPerf Use Case Results ===")
             for key, value in performance_results.items():
-                print(f"{key}: {value}")
-            print("==========================================\n")
+                logger.info(f"{key}: {value}")
+            logger.info("==========================================\n")
 
             # Validate that the use case executed successfully
             assert traffic_generator is not None, "Traffic generator should be created"
@@ -426,10 +429,10 @@ class TestRdkCpeUseCases:
             assert hasattr(traffic_generator, 'sender_pid'), "Traffic generator should have sender PID"
             assert hasattr(traffic_generator, 'receiver_pid'), "Traffic generator should have receiver PID"
 
-            print("✅ Boardfarm3 iperf use case executed successfully!")
+            logger.info("✅ Boardfarm3 iperf use case executed successfully!")
 
         except Exception as e:
-            print(f"✗ Boardfarm3 iperf use case failed: {e}")
+            logger.info(f"✗ Boardfarm3 iperf use case failed: {e}")
             # Try to clean up any remaining processes
             try:
                 board.command("pkill -f iperf3", timeout=5)
