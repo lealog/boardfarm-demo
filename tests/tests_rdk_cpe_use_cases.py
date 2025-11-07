@@ -495,27 +495,32 @@ class TestRdkCpeUseCases:
         iperf_ports = board.config.get("iperf_ports_ipv4", [5201, 5202, 5203])
         max_retries_per_port = 3
 
-        # Check if iperf3 is available
-        try:
-            result = board.command("which iperf3", timeout=10)
-            if "iperf3" not in result:
-                logger.info("ℹ iperf3 not available on CPE")
-                pytest.skip("iperf3 not available on CPE device")
-                return
-            logger.info("✓ iperf3 is available on CPE")
-        except Exception as e:
-            pytest.skip(f"Cannot check iperf3 availability: {e}")
-            return
+        # Check if iperf3 is available locally (on the PC running boardfarm)
+        import subprocess
+        import shutil
 
-        # Check connectivity to iperf server
-        logger.info(f"Checking IPv4 connectivity to {iperf_server_ipv4}...")
+        logger.info("Checking if iperf3 is available locally...")
+        if not shutil.which("iperf3"):
+            logger.error("iperf3 not found on local system")
+            pytest.skip("iperf3 not available on local system. Install with: apt-get install iperf3")
+            return
+        logger.info("✓ iperf3 is available locally")
+
+        # Check connectivity to iperf server through CPE
+        logger.info(f"Checking IPv4 connectivity to {iperf_server_ipv4} through CPE...")
         try:
-            ping_result = board.command(f"ping -c 2 -W 5 {iperf_server_ipv4}", timeout=15)
-            if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
-                logger.warning(f"Cannot reach {iperf_server_ipv4} via IPv4")
+            # Ping from local PC - traffic goes through CPE
+            result = subprocess.run(
+                ["ping", "-c", "2", "-W", "5", iperf_server_ipv4],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            if "2 packets transmitted" not in result.stdout or "0 received" in result.stdout:
+                logger.warning(f"Cannot reach {iperf_server_ipv4} via IPv4 through CPE")
                 pytest.skip(f"Cannot reach iperf server {iperf_server_ipv4} via IPv4")
                 return
-            logger.info(f"✓ CPE can reach {iperf_server_ipv4} via IPv4")
+            logger.info(f"✓ Local PC can reach {iperf_server_ipv4} via IPv4 through CPE")
         except Exception as e:
             logger.warning(f"IPv4 connectivity check failed: {e}")
             pytest.skip(f"Cannot verify IPv4 connectivity to {iperf_server_ipv4}")
@@ -526,22 +531,31 @@ class TestRdkCpeUseCases:
         import time
 
         def run_iperf_with_retry(test_name, extra_flags=""):
-            """Run iperf3 test with retry mechanism, rotating through available ports.
+            """Run iperf3 test locally with retry mechanism, rotating through available ports.
 
+            Traffic flows: Local PC → CPE → Internet (ping.online.net)
             Tries each port up to max_retries_per_port times before moving to next port.
             """
             for port in iperf_ports:
                 for attempt in range(1, max_retries_per_port + 1):
                     try:
-                        cmd = f"iperf3 -c {iperf_server_ipv4} -p {port} -t {test_duration} {extra_flags}"
-                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {cmd}")
-                        result = board.command(cmd, timeout=test_duration + 30)
+                        cmd = ["iperf3", "-c", iperf_server_ipv4, "-p", str(port), "-t", str(test_duration)]
+                        if extra_flags:
+                            cmd.extend(extra_flags.split())
+                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {' '.join(cmd)}")
 
-                        # Debug: Log the actual output (first 500 chars)
-                        logger.info(f"iperf3 output preview: {result[:500] if len(result) > 500 else result}")
+                        # Run iperf3 locally
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=test_duration + 30
+                        )
+
+                        output = result.stdout + result.stderr
 
                         # Check if server is busy
-                        if "server is busy" in result.lower() or "unable to connect" in result.lower():
+                        if "server is busy" in output.lower() or "unable to connect" in output.lower():
                             if attempt < max_retries_per_port:
                                 logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
                                 time.sleep(2)  # Wait before retry
@@ -551,7 +565,7 @@ class TestRdkCpeUseCases:
                                 break  # Try next port
 
                         # Check if we got valid iperf output
-                        if "bits/sec" not in result.lower() and "connecting to host" not in result.lower():
+                        if "bits/sec" not in output.lower() and "connecting to host" not in output.lower():
                             logger.warning(f"Unexpected iperf3 output on port {port}, retrying...")
                             if attempt < max_retries_per_port:
                                 time.sleep(2)
@@ -561,8 +575,16 @@ class TestRdkCpeUseCases:
 
                         # Successfully got result
                         logger.info(f"✓ Successfully connected using port {port}")
-                        return result, port, None
+                        return output, port, None
 
+                    except subprocess.TimeoutExpired:
+                        if attempt < max_retries_per_port:
+                            logger.warning(f"Timeout on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                            time.sleep(2)
+                            continue
+                        else:
+                            logger.warning(f"Timeout on port {port} after {max_retries_per_port} attempts, trying next port...")
+                            break
                     except Exception as e:
                         if attempt < max_retries_per_port:
                             logger.warning(f"Error on port {port}, attempt {attempt}/{max_retries_per_port}: {e}")
@@ -683,40 +705,50 @@ class TestRdkCpeUseCases:
         iperf_ports = board.config.get("iperf_ports_ipv6", [5204, 5205, 5206])
         max_retries_per_port = 3
 
-        # Check if iperf3 is available
-        try:
-            result = board.command("which iperf3", timeout=10)
-            if "iperf3" not in result:
-                logger.info("ℹ iperf3 not available on CPE")
-                pytest.skip("iperf3 not available on CPE device")
-                return
-            logger.info("✓ iperf3 is available on CPE")
-        except Exception as e:
-            pytest.skip(f"Cannot check iperf3 availability: {e}")
-            return
+        # Check if iperf3 is available locally (on the PC running boardfarm)
+        import subprocess
+        import shutil
 
-        # Check if IPv6 is available on CPE
-        logger.info("Checking IPv6 availability on CPE...")
+        logger.info("Checking if iperf3 is available locally...")
+        if not shutil.which("iperf3"):
+            logger.error("iperf3 not found on local system")
+            pytest.skip("iperf3 not available on local system. Install with: apt-get install iperf3")
+            return
+        logger.info("✓ iperf3 is available locally")
+
+        # Check if IPv6 is available locally
+        logger.info("Checking IPv6 availability locally...")
         try:
-            ipv6_check = board.command("ip -6 addr show", timeout=10)
-            if "inet6" not in ipv6_check or "scope global" not in ipv6_check:
-                logger.info("ℹ IPv6 not configured on CPE")
-                pytest.skip("IPv6 not available on CPE device")
+            result = subprocess.run(
+                ["ip", "-6", "addr", "show"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if "inet6" not in result.stdout or "scope global" not in result.stdout:
+                logger.info("ℹ IPv6 not configured on local system")
+                pytest.skip("IPv6 not available on local system")
                 return
-            logger.info("✓ IPv6 is configured on CPE")
+            logger.info("✓ IPv6 is configured locally")
         except Exception as e:
             pytest.skip(f"Cannot check IPv6 availability: {e}")
             return
 
-        # Check IPv6 connectivity to iperf server
-        logger.info(f"Checking IPv6 connectivity to {iperf_server_ipv6}...")
+        # Check IPv6 connectivity to iperf server through CPE
+        logger.info(f"Checking IPv6 connectivity to {iperf_server_ipv6} through CPE...")
         try:
-            ping_result = board.command(f"ping6 -c 2 -W 5 {iperf_server_ipv6}", timeout=15)
-            if "2 packets transmitted" not in ping_result or "0 received" in ping_result:
-                logger.warning(f"Cannot reach {iperf_server_ipv6} via IPv6")
+            # Ping6 from local PC - traffic goes through CPE
+            result = subprocess.run(
+                ["ping6", "-c", "2", "-W", "5", iperf_server_ipv6],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
+            if "2 packets transmitted" not in result.stdout or "0 received" in result.stdout:
+                logger.warning(f"Cannot reach {iperf_server_ipv6} via IPv6 through CPE")
                 pytest.skip(f"Cannot reach iperf server {iperf_server_ipv6} via IPv6")
                 return
-            logger.info(f"✓ CPE can reach {iperf_server_ipv6} via IPv6")
+            logger.info(f"✓ Local PC can reach {iperf_server_ipv6} via IPv6 through CPE")
         except Exception as e:
             logger.warning(f"IPv6 connectivity check failed: {e}")
             pytest.skip(f"Cannot verify IPv6 connectivity to {iperf_server_ipv6}")
@@ -727,19 +759,31 @@ class TestRdkCpeUseCases:
         import time
 
         def run_iperf_ipv6_with_retry(test_name, extra_flags=""):
-            """Run iperf3 IPv6 test with retry mechanism, rotating through available ports.
+            """Run iperf3 IPv6 test locally with retry mechanism, rotating through available ports.
 
+            Traffic flows: Local PC → CPE → Internet (ping6.online.net)
             Tries each port up to max_retries_per_port times before moving to next port.
             """
             for port in iperf_ports:
                 for attempt in range(1, max_retries_per_port + 1):
                     try:
-                        cmd = f"iperf3 -c {iperf_server_ipv6} -p {port} -t {test_duration} {extra_flags} -6"
-                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {cmd}")
-                        result = board.command(cmd, timeout=test_duration + 30)
+                        cmd = ["iperf3", "-c", iperf_server_ipv6, "-p", str(port), "-t", str(test_duration), "-6"]
+                        if extra_flags:
+                            cmd.extend(extra_flags.split())
+                        logger.info(f"[Port {port}, Attempt {attempt}/{max_retries_per_port}] Running: {' '.join(cmd)}")
+
+                        # Run iperf3 locally
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=test_duration + 30
+                        )
+
+                        output = result.stdout + result.stderr
 
                         # Check if server is busy
-                        if "server is busy" in result.lower() or "unable to connect" in result.lower():
+                        if "server is busy" in output.lower() or "unable to connect" in output.lower():
                             if attempt < max_retries_per_port:
                                 logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
                                 time.sleep(2)  # Wait before retry
@@ -748,10 +792,27 @@ class TestRdkCpeUseCases:
                                 logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
                                 break  # Try next port
 
+                        # Check if we got valid iperf output
+                        if "bits/sec" not in output.lower() and "connecting to host" not in output.lower():
+                            logger.warning(f"Unexpected iperf3 output on port {port}, retrying...")
+                            if attempt < max_retries_per_port:
+                                time.sleep(2)
+                                continue
+                            else:
+                                break
+
                         # Successfully got result
                         logger.info(f"✓ Successfully connected using port {port}")
-                        return result, port, None
+                        return output, port, None
 
+                    except subprocess.TimeoutExpired:
+                        if attempt < max_retries_per_port:
+                            logger.warning(f"Timeout on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                            time.sleep(2)
+                            continue
+                        else:
+                            logger.warning(f"Timeout on port {port} after {max_retries_per_port} attempts, trying next port...")
+                            break
                     except Exception as e:
                         if attempt < max_retries_per_port:
                             logger.warning(f"Error on port {port}, attempt {attempt}/{max_retries_per_port}: {e}")
