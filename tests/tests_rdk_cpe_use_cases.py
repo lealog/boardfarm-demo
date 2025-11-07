@@ -481,7 +481,8 @@ class TestRdkCpeUseCases:
         This test measures actual CPE IPv4 performance by testing:
         - TCP Download throughput (WAN → CPE → LAN)
         - TCP Upload throughput (LAN → CPE → WAN)
-        - UDP Upload with packet loss monitoring
+        - UDP Download throughput with packet loss monitoring (WAN → CPE → LAN)
+        - UDP Upload throughput with packet loss monitoring (LAN → CPE → WAN)
 
         Uses public iperf3 server: ping.online.net (ports 5200-5209)
         """
@@ -608,7 +609,7 @@ class TestRdkCpeUseCases:
         if result:
             # For reverse mode (-R), look for "receiver" line in final summary
             # Match: "91.6 Mbits/sec                  receiver"
-            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?receiver', result, re.IGNORECASE)
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -627,7 +628,7 @@ class TestRdkCpeUseCases:
         if result:
             # For normal mode, look for "sender" line in final summary
             # Match: "94.0 Mbits/sec    0             sender"
-            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?sender', result, re.IGNORECASE)
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*sender', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -640,21 +641,58 @@ class TestRdkCpeUseCases:
             throughput_results["tcp_upload"] = f"Error: {error}"
             logger.error(f"IPv4 TCP Upload test failed: {error}")
 
-        # Test 3: IPv4 UDP Upload with bandwidth limit
-        logger.info("\n--- Test 3: IPv4 UDP Upload (CPE → WAN) ---")
-        result, used_port, error = run_iperf_with_retry("udp_upload", "-u -b 50M")
+        # Test 3: IPv4 UDP Download with bandwidth limit (reverse mode)
+        logger.info("\n--- Test 3: IPv4 UDP Download (WAN → CPE) ---")
+        result, used_port, error = run_iperf_with_retry("udp_download", "-u -b 50M -R")
         if result:
-            # For UDP, look for both bandwidth and packet loss
-            bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
+            # For UDP reverse, look for receiver line with bandwidth
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                loss = bw_match.group(3)
-                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
-                logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+
+                # Try to find packet loss percentage on receiver line
+                loss_match = re.search(r'receiver.*?(\d+)/(\d+)\s+\((\d+\.?\d*)%\)', result, re.IGNORECASE)
+                if loss_match:
+                    loss = loss_match.group(3)
+                    throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
+                    logger.info(f"✓ IPv4 UDP Download: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+                else:
+                    throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
+                    logger.info(f"✓ IPv4 UDP Download: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["udp_download"] = "Failed to parse"
+                logger.warning("Could not parse UDP download bandwidth")
+                logger.debug(f"UDP download output for debugging:\n{result}")
+        else:
+            throughput_results["udp_download"] = f"Error: {error}"
+            logger.error(f"IPv4 UDP Download test failed: {error}")
+
+        # Test 4: IPv4 UDP Upload with bandwidth limit
+        logger.info("\n--- Test 4: IPv4 UDP Upload (CPE → WAN) ---")
+        result, used_port, error = run_iperf_with_retry("udp_upload", "-u -b 50M")
+        if result:
+            # For UDP, look for bandwidth on the summary line (may or may not have loss %)
+            # Try to find sender line with bandwidth
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*sender', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+
+                # Try to find packet loss percentage
+                loss_match = re.search(r'\((\d+\.?\d*)%\)', result)
+                if loss_match:
+                    loss = loss_match.group(1)
+                    throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
+                    logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+                else:
+                    # No loss percentage found, just report bandwidth
+                    throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
+                    logger.info(f"✓ IPv4 UDP Upload: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
+                logger.debug(f"UDP output for debugging:\n{result}")
         else:
             throughput_results["udp_upload"] = f"Error: {error}"
             logger.error(f"IPv4 UDP Upload test failed: {error}")
@@ -698,9 +736,10 @@ class TestRdkCpeUseCases:
         This test measures actual CPE IPv6 performance by testing:
         - TCP Download throughput (WAN → CPE → LAN)
         - TCP Upload throughput (LAN → CPE → WAN)
-        - UDP Upload with packet loss monitoring
+        - UDP Download throughput with packet loss monitoring (WAN → CPE → LAN)
+        - UDP Upload throughput with packet loss monitoring (LAN → CPE → WAN)
 
-        Uses public iperf3 server: ping6.online.net (ports 5200-5209)
+        Uses public iperf3 server: ping6.online.net (ports 5205-5209)
         """
         board = self._get_board(device_manager)
 
@@ -843,7 +882,7 @@ class TestRdkCpeUseCases:
         if result:
             # For reverse mode (-R), look for "receiver" line in final summary
             # Match: "91.6 Mbits/sec                  receiver"
-            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?receiver', result, re.IGNORECASE)
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -862,7 +901,7 @@ class TestRdkCpeUseCases:
         if result:
             # For normal mode, look for "sender" line in final summary
             # Match: "94.0 Mbits/sec    0             sender"
-            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*?sender', result, re.IGNORECASE)
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*sender', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
@@ -875,21 +914,56 @@ class TestRdkCpeUseCases:
             throughput_results["tcp_upload"] = f"Error: {error}"
             logger.error(f"IPv6 TCP Upload test failed: {error}")
 
-        # Test 3: IPv6 UDP Upload with bandwidth limit
-        logger.info("\n--- Test 3: IPv6 UDP Upload (CPE → WAN) ---")
-        result, used_port, error = run_iperf_ipv6_with_retry("udp_upload", "-u -b 50M")
+        # Test 3: IPv6 UDP Download with bandwidth limit (reverse mode)
+        logger.info("\n--- Test 3: IPv6 UDP Download (WAN → CPE) ---")
+        result, used_port, error = run_iperf_ipv6_with_retry("udp_download", "-u -b 50M -R")
         if result:
-            # For UDP, look for both bandwidth and packet loss
-            bw_match = re.search(r'([0-9.]+)\s+([KMGT]?)bits/sec.*?([0-9.]+)%', result, re.IGNORECASE)
+            # For UDP reverse, look for receiver line with bandwidth
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*receiver', result, re.IGNORECASE)
             if bw_match:
                 bandwidth = float(bw_match.group(1))
                 unit = bw_match.group(2) or ""
-                loss = bw_match.group(3)
-                throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
-                logger.info(f"✓ IPv6 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+
+                # Try to find packet loss percentage on receiver line
+                loss_match = re.search(r'receiver.*?(\d+)/(\d+)\s+\((\d+\.?\d*)%\)', result, re.IGNORECASE)
+                if loss_match:
+                    loss = loss_match.group(3)
+                    throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
+                    logger.info(f"✓ IPv6 UDP Download: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+                else:
+                    throughput_results["udp_download"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
+                    logger.info(f"✓ IPv6 UDP Download: {bandwidth} {unit}bits/sec")
+            else:
+                throughput_results["udp_download"] = "Failed to parse"
+                logger.warning("Could not parse UDP download bandwidth")
+                logger.debug(f"UDP download output for debugging:\n{result}")
+        else:
+            throughput_results["udp_download"] = f"Error: {error}"
+            logger.error(f"IPv6 UDP Download test failed: {error}")
+
+        # Test 4: IPv6 UDP Upload with bandwidth limit
+        logger.info("\n--- Test 4: IPv6 UDP Upload (CPE → WAN) ---")
+        result, used_port, error = run_iperf_ipv6_with_retry("udp_upload", "-u -b 50M")
+        if result:
+            # For UDP, look for bandwidth on the summary line (may or may not have loss %)
+            bw_match = re.search(r'(\d+\.?\d*)\s+([KMGT]?)bits/sec.*sender', result, re.IGNORECASE)
+            if bw_match:
+                bandwidth = float(bw_match.group(1))
+                unit = bw_match.group(2) or ""
+
+                # Try to find packet loss percentage
+                loss_match = re.search(r'sender.*?(\d+)/(\d+)\s+\((\d+\.?\d*)%\)', result, re.IGNORECASE)
+                if loss_match:
+                    loss = loss_match.group(3)
+                    throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (loss: {loss}%, port: {used_port})"
+                    logger.info(f"✓ IPv6 UDP Upload: {bandwidth} {unit}bits/sec (packet loss: {loss}%)")
+                else:
+                    throughput_results["udp_upload"] = f"{bandwidth} {unit}bits/sec (port: {used_port})"
+                    logger.info(f"✓ IPv6 UDP Upload: {bandwidth} {unit}bits/sec")
             else:
                 throughput_results["udp_upload"] = "Failed to parse"
                 logger.warning("Could not parse UDP bandwidth")
+                logger.debug(f"UDP output for debugging:\n{result}")
         else:
             throughput_results["udp_upload"] = f"Error: {error}"
             logger.error(f"IPv6 UDP Upload test failed: {error}")
