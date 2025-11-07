@@ -558,18 +558,21 @@ class TestRdkCpeUseCases:
                         # Debug: Log the actual output (show full output for debugging)
                         logger.debug(f"iperf3 full output:\n{output}")
 
-                        # Check if server is busy
-                        if "server is busy" in output.lower() or "unable to connect" in output.lower():
+                        # Check for errors that should trigger retry
+                        if ("server is busy" in output.lower() or
+                            "unable to connect" in output.lower() or
+                            "connection refused" in output.lower() or
+                            "unable to read from stream" in output.lower()):
                             if attempt < max_retries_per_port:
-                                logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                                logger.warning(f"Server error on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
                                 time.sleep(2)  # Wait before retry
                                 continue
                             else:
-                                logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
+                                logger.warning(f"Server error on port {port} after {max_retries_per_port} attempts, trying next port...")
                                 break  # Try next port
 
                         # Check if we got valid iperf output
-                        if "bits/sec" not in output.lower() and "connecting to host" not in output.lower():
+                        if "bits/sec" not in output.lower():
                             logger.warning(f"Unexpected iperf3 output on port {port}, retrying...")
                             if attempt < max_retries_per_port:
                                 time.sleep(2)
@@ -714,18 +717,37 @@ class TestRdkCpeUseCases:
 
         assert successful_tests >= 2, f"At least 2 IPv4 throughput tests should succeed, got {successful_tests}"
 
-        # Validate TCP download and upload
+        # Report individual test results
+        logger.info("\n=== Test Results Summary ===")
         if "tcp_download" in throughput_results:
             result_str = throughput_results["tcp_download"]
             if "bits/sec" in result_str and "Error" not in result_str:
                 logger.info("✅ IPv4 TCP Download test passed")
+            else:
+                logger.warning(f"❌ IPv4 TCP Download test failed: {result_str}")
 
         if "tcp_upload" in throughput_results:
             result_str = throughput_results["tcp_upload"]
             if "bits/sec" in result_str and "Error" not in result_str:
                 logger.info("✅ IPv4 TCP Upload test passed")
+            else:
+                logger.warning(f"❌ IPv4 TCP Upload test failed: {result_str}")
 
-        logger.info("✅ IPv4 CPE WAN throughput test completed!")
+        if "udp_download" in throughput_results:
+            result_str = throughput_results["udp_download"]
+            if "bits/sec" in result_str and "Error" not in result_str and "Failed" not in result_str:
+                logger.info("✅ IPv4 UDP Download test passed")
+            else:
+                logger.warning(f"⚠️  IPv4 UDP Download test failed: {result_str}")
+
+        if "udp_upload" in throughput_results:
+            result_str = throughput_results["udp_upload"]
+            if "bits/sec" in result_str and "Error" not in result_str and "Failed" not in result_str:
+                logger.info("✅ IPv4 UDP Upload test passed")
+            else:
+                logger.warning(f"⚠️  IPv4 UDP Upload test failed: {result_str}")
+
+        logger.info(f"\n✅ IPv4 CPE WAN throughput test completed! ({successful_tests}/4 tests passed)")
 
     @pytest.mark.integration
     @pytest.mark.slow
@@ -831,18 +853,21 @@ class TestRdkCpeUseCases:
                         # Debug: Log the actual output (show full output for debugging)
                         logger.debug(f"iperf3 full output:\n{output}")
 
-                        # Check if server is busy
-                        if "server is busy" in output.lower() or "unable to connect" in output.lower():
+                        # Check for errors that should trigger retry
+                        if ("server is busy" in output.lower() or
+                            "unable to connect" in output.lower() or
+                            "connection refused" in output.lower() or
+                            "unable to read from stream" in output.lower()):
                             if attempt < max_retries_per_port:
-                                logger.warning(f"Server busy on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
+                                logger.warning(f"Server error on port {port}, attempt {attempt}/{max_retries_per_port}, retrying...")
                                 time.sleep(2)  # Wait before retry
                                 continue
                             else:
-                                logger.warning(f"Server busy on port {port} after {max_retries_per_port} attempts, trying next port...")
+                                logger.warning(f"Server error on port {port} after {max_retries_per_port} attempts, trying next port...")
                                 break  # Try next port
 
                         # Check if we got valid iperf output
-                        if "bits/sec" not in output.lower() and "connecting to host" not in output.lower():
+                        if "bits/sec" not in output.lower():
                             logger.warning(f"Unexpected iperf3 output on port {port}, retrying...")
                             if attempt < max_retries_per_port:
                                 time.sleep(2)
@@ -985,15 +1010,34 @@ class TestRdkCpeUseCases:
 
         assert successful_tests >= 2, f"At least 2 IPv6 throughput tests should succeed, got {successful_tests}"
 
-        # Validate TCP download and upload
+        # Report individual test results
+        logger.info("\n=== Test Results Summary ===")
         if "tcp_download" in throughput_results:
             result_str = throughput_results["tcp_download"]
             if "bits/sec" in result_str and "Error" not in result_str:
                 logger.info("✅ IPv6 TCP Download test passed")
+            else:
+                logger.warning(f"❌ IPv6 TCP Download test failed: {result_str}")
 
         if "tcp_upload" in throughput_results:
             result_str = throughput_results["tcp_upload"]
             if "bits/sec" in result_str and "Error" not in result_str:
                 logger.info("✅ IPv6 TCP Upload test passed")
+            else:
+                logger.warning(f"❌ IPv6 TCP Upload test failed: {result_str}")
 
-        logger.info("✅ IPv6 CPE WAN throughput test completed!")
+        if "udp_download" in throughput_results:
+            result_str = throughput_results["udp_download"]
+            if "bits/sec" in result_str and "Error" not in result_str and "Failed" not in result_str:
+                logger.info("✅ IPv6 UDP Download test passed")
+            else:
+                logger.warning(f"⚠️  IPv6 UDP Download test failed: {result_str}")
+
+        if "udp_upload" in throughput_results:
+            result_str = throughput_results["udp_upload"]
+            if "bits/sec" in result_str and "Error" not in result_str and "Failed" not in result_str:
+                logger.info("✅ IPv6 UDP Upload test passed")
+            else:
+                logger.warning(f"⚠️  IPv6 UDP Upload test failed: {result_str}")
+
+        logger.info(f"\n✅ IPv6 CPE WAN throughput test completed! ({successful_tests}/4 tests passed)")
