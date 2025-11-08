@@ -44,18 +44,15 @@ class TestPerformance:
         logger.info("  - apt: apt-get install speedtest-cli")
         return False
 
-    def _convert_bytes_to_human_readable(self, bytes_value: float) -> str:
-        """Convert bytes to human readable format.
+    def _convert_bps_to_human_readable(self, bits_per_second: float) -> str:
+        """Convert bits per second to human readable format.
 
         Args:
-            bytes_value: Value in bytes
+            bits_per_second: Value in bits per second
 
         Returns:
             str: Human readable string (e.g., "127.89 Mbps")
         """
-        # Convert bytes per second to bits per second
-        bits_per_second = bytes_value * 8
-
         if bits_per_second >= 1_000_000_000:
             return f"{bits_per_second / 1_000_000_000:.2f} Gbps"
         elif bits_per_second >= 1_000_000:
@@ -139,13 +136,13 @@ class TestPerformance:
             client_isp = client_info.get("isp", "Unknown")
 
             # Convert to human readable
-            download_readable = self._convert_bytes_to_human_readable(download_bps)
-            upload_readable = self._convert_bytes_to_human_readable(upload_bps)
+            download_readable = self._convert_bps_to_human_readable(download_bps)
+            upload_readable = self._convert_bps_to_human_readable(upload_bps)
 
             # Log results
             logger.info("\n=== Speedtest Results (via CPE) ===")
-            logger.info(f"Download: {download_bps:.0f} bytes/sec ({download_readable})")
-            logger.info(f"Upload: {upload_bps:.0f} bytes/sec ({upload_readable})")
+            logger.info(f"Download: {download_bps:.0f} bits/sec ({download_readable})")
+            logger.info(f"Upload: {upload_bps:.0f} bits/sec ({upload_readable})")
             logger.info(f"Ping: {ping_ms:.2f} ms")
             logger.info("\n--- Server Information ---")
             logger.info(f"Country: {server_country}")
