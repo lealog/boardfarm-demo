@@ -1,0 +1,51 @@
+# Documentation Structure Summary
+
+## Release Notes & Changelogs (3 files)
+
+1. **RELEASE_NOTES.md** (13KB) - High-level release notes
+   - Major releases and features
+   - Quick start guides
+   - Migration guides
+   - Links to detailed changelogs
+
+2. **FRAMEWORK_CHANGELOG.md** (10KB) - Framework & infrastructure
+   - Framework components (BDD, pytest-boardfarm, etc.)
+   - Connection types (SSH, ser2net, LXD)
+   - Device implementations
+   - Libraries (DMCLI, etc.)
+   - Dependencies and configuration
+
+3. **TEST_CHANGELOG.md** (13KB) - Test changes
+   - Test files added/modified/deleted
+   - Test coverage details
+   - Test execution commands
+   - Test organization patterns
+
+## BDD Documentation (2 files)
+
+4. **BDD_TESTING_GUIDE.md** (11KB) - Complete BDD guide
+   - BDD concepts and benefits
+   - Gherkin syntax tutorial
+   - Running BDD tests
+   - Best practices
+   - Integration with boardfarm
+
+5. **BDD_COMPARISON.md** (13KB) - Comparison guide
+   - Side-by-side examples (4 detailed comparisons)
+   - Traditional pytest vs BDD
+   - When to use each approach
+   - Pros and cons table
+
+## Main Documentation
+
+6. **README.md** (21KB) - Primary project documentation
+   - Quick start guide
+   - Device implementations (RPI, RDK)
+   - Connection types setup
+   - Test execution examples
+   - DMCLI integration
+   - Use cases
+
+## Total: 81KB of documentation
+
+All files cross-reference each other for easy navigation.
