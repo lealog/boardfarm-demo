@@ -74,8 +74,8 @@ class TestPerformance:
         Traffic flow: LAN PC (running speedtest) → CPE → Internet (Speedtest servers)
 
         Reports:
-        - Download speed (bytes/sec)
-        - Upload speed (bytes/sec)
+        - Download speed (bits/sec)
+        - Upload speed (bits/sec)
         - Ping latency (ms)
         - Server information (country, sponsor, host, name)
         - Client IP address
@@ -106,6 +106,18 @@ class TestPerformance:
             )
 
             output = result.stdout
+            stderr_output = result.stderr
+
+            # Check for HTTP errors (403, etc.) in stderr
+            if "HTTP Error 403" in stderr_output or "Forbidden" in stderr_output:
+                logger.error("speedtest-cli returned HTTP 403 Forbidden error")
+                logger.error("This may be due to:")
+                logger.error("  - Rate limiting from too many recent speedtest requests")
+                logger.error("  - Network/ISP blocking speedtest-cli")
+                logger.error("  - Temporary server issues")
+                logger.info("Suggestion: Wait a few minutes and try again, or use speedtest-cli --simple instead")
+                pytest.skip("speedtest-cli blocked by HTTP 403 Forbidden (rate limiting or network block)")
+                return
 
             # Parse JSON output
             try:
@@ -113,7 +125,7 @@ class TestPerformance:
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse speedtest JSON output: {e}")
                 logger.error(f"Raw output: {output}")
-                logger.error(f"Error output: {result.stderr}")
+                logger.error(f"Error output: {stderr_output}")
                 pytest.fail("Failed to parse speedtest-cli JSON output")
                 return
 
