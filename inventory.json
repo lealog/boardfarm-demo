@@ -27,7 +27,7 @@
         "wan_interface": "erouter0",
         "lan_interface": "br0",
         "eRouter_Provisioning_mode": "ipv4",
-        "gui_password": "password",
+        "gui_password": "${CPE_GUI_PASSWORD}",
         "oui": "001122"
       }
     ]
@@ -49,7 +49,7 @@
         "wan_interface": "erouter0",
         "lan_interface": "br0",
         "eRouter_Provisioning_mode": "ipv4",
-        "gui_password": "password",
+        "gui_password": "${CPE_GUI_PASSWORD}",
         "oui": "001122"
       }
     ]
@@ -77,10 +77,10 @@
         "type": "rpi_cpe",
         "connection_type": "ssh",
         "ip_addr": "192.168.1.1",
-        "username": "root",
-        "password": "your_password_here",
+        "username": "${CPE_USERNAME}",
+        "password": "${CPE_PASSWORD}",
         "port": "22",
-        "shell_prompt": "root@.*#",
+        "shell_prompt": "${CPE_SHELL_PROMPT}",
         "model": "CPE-Gateway",
         "hostname": "CPE-Gateway"
       }
@@ -93,16 +93,16 @@
         "type": "rdk_cpe",
         "connection_type": "ssh",
         "ip_addr": "192.168.1.1",
-        "username": "root",
-        "password": "your_password_here",
+        "username": "${CPE_USERNAME}",
+        "password": "${CPE_PASSWORD}",
         "port": "22",
-        "shell_prompt": "root@.*#",
+        "shell_prompt": "${CPE_SHELL_PROMPT}",
         "model": "RDK-CPE-Gateway",
         "hostname": "RDK-CPE-Gateway",
         "wan_interface": "erouter0",
         "lan_interface": "brlan0",
         "eRouter_Provisioning_mode": "ipv4",
-        "gui_password": "password",
+        "gui_password": "${CPE_GUI_PASSWORD}",
         "iperf_server_ipv4": "ping.online.net",
         "iperf_server_ipv6": "ping6.online.net",
         "iperf_ports_ipv4": [5200, 5201, 5202, 5203, 5204],

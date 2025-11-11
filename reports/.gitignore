@@ -1,0 +1,5 @@
+# Ignore all HTML reports
+*.html
+
+# But keep the .gitkeep file
+!.gitkeep
